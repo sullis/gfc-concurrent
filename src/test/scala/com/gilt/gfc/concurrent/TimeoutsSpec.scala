@@ -1,0 +1,58 @@
+package com.gilt.gfc.concurrent
+
+import java.util.concurrent.{ TimeoutException, TimeUnit }
+import scala.concurrent.duration.{ Duration, FiniteDuration }
+import scala.concurrent.{ Future, Await }
+import org.scalatest.{WordSpec, Matchers}
+
+class TimeoutsSpec extends WordSpec with Matchers {
+  import TimeoutsSpec._
+
+  "Timeouts" when {
+    "generating timing out futures" should {
+      "create a Future that times out after the given finite duration" in {
+        val now = System.currentTimeMillis
+        val after = FiniteDuration(1, "second")
+        val timingOut = Timeouts.timeout(after)
+        val thrown = the [TimeoutException] thrownBy { Await.result(timingOut, Duration(10, "seconds")) }
+        val elapsed = (System.currentTimeMillis - now)
+        elapsed should be <= after.toMillis + 100
+        elapsed should be >= after.toMillis
+      }
+
+      "create timinig out Futures that will fail predictably even under load" in {
+        import scala.util.Random._
+
+        val MaxTimeout = Duration(10, "seconds").toMillis.toInt
+        val MaxDelta = Duration(50, "milliseconds").toMillis
+        val Load = 10000
+
+        val timingOuts: List[(Future[Nothing], Duration)] = (1 to Load).map { i =>
+          val after = Duration(nextInt(MaxTimeout), "milliseconds")
+          val timingOut = Timeouts.timeout(after)
+          (timingOut, after)
+        }.toList
+
+        val timedOuts: List[(Future[Nothing], Duration, Duration, Duration)] = timingOuts.map { case (timingOut, after) =>
+          val thrown = the [TimeoutException] thrownBy { Await.result(timingOut, Duration.Inf) }
+          // println(thrown)
+          val real = Duration(extractReal(thrown.getMessage), TimeUnit.MILLISECONDS)
+          val delta = Duration(real.toMillis - after.toMillis, TimeUnit.MILLISECONDS)
+          (timingOut, after, real, delta)
+        }
+
+        timedOuts.filter { case (timedOut, after, real, delta) => delta.toMillis > MaxDelta }.size === 0
+      }
+    }
+  }
+}
+
+object TimeoutsSpec {
+  private val pattern = """real: (\d+) ms.""".r
+
+  def extractReal(s: String): Int = try {
+    pattern.findFirstMatchIn(s).map { _.toString.split("real: ") }.get(1).split(" ms.").head.toInt
+  } catch {
+    case ex: Exception => throw new RuntimeException(s"Unable to parse real time from '${s}'", ex)
+  }
+}
