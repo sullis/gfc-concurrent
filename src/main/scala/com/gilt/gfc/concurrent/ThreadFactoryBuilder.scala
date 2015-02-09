@@ -39,7 +39,8 @@ case class ThreadFactoryBuilder private (private val nameFormat: Option[String],
 
     new ThreadFactory {
       override def newThread(runnable: Runnable): Thread = {
-        val thread = threadGroup.fold(new Thread(runnable))(new Thread(_, runnable))
+        val group = threadGroup.getOrElse(ThreadGroupBuilder.currentThreadGroup())
+        val thread = new Thread(group, runnable)
         nameF.foreach(f => thread.setName(f()))
         priority.foreach(thread.setPriority)
         exceptionHandler.foreach(thread.setUncaughtExceptionHandler)

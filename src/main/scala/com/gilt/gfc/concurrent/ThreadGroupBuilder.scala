@@ -12,26 +12,28 @@ package com.gilt.gfc.concurrent
  */
 object ThreadGroupBuilder {
   def apply(): ThreadGroupBuilder = ThreadGroupBuilder(None, false, None, None)
+
+  // The ThreadGroup of the current Thread or the SecurityManager if one exists
+  private[concurrent] def currentThreadGroup(): ThreadGroup = {
+    val secMgr = Option(System.getSecurityManager)
+    secMgr.fold(Thread.currentThread.getThreadGroup)(_.getThreadGroup)
+  }
 }
 
 case class ThreadGroupBuilder private (private val name: Option[String],
                                        private val daemon: Boolean,
-                                       private val parentOpt: Option[ThreadGroup],
+                                       private val parent: Option[ThreadGroup],
                                        private val maxPriority: Option[Int]) {
   def withName(name: String): ThreadGroupBuilder = copy(name = Some(name))
 
   def withDaemonFlag(isDaemon: Boolean): ThreadGroupBuilder = copy(daemon = isDaemon)
 
-  def withParent(parent: ThreadGroup): ThreadGroupBuilder = copy(parentOpt = Some(parent))
+  def withParent(parent: ThreadGroup): ThreadGroupBuilder = copy(parent = Some(parent))
 
   def withMaxPriority(maxPriority: Int): ThreadGroupBuilder = copy(maxPriority = Some(maxPriority))
 
   def build(): ThreadGroup = {
-    val parent = parentOpt.getOrElse {
-      val secMgr = Option(System.getSecurityManager)
-      secMgr.fold(Thread.currentThread.getThreadGroup)(_.getThreadGroup)
-    }
-    val group = new ThreadGroup(parent, name.orNull)
+    val group = new ThreadGroup(parent.getOrElse(ThreadGroupBuilder.currentThreadGroup), name.orNull)
     group.setDaemon(daemon)
     maxPriority.foreach(group.setMaxPriority)
     group
