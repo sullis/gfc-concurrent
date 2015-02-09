@@ -31,7 +31,7 @@ case class ThreadFactoryBuilder private (private val nameFormat: Option[String],
 
   def withDaemonFlag(isDaemon: Boolean): ThreadFactoryBuilder = copy(daemon = isDaemon)
 
-  def build: ThreadFactory = {
+  def build(): ThreadFactory = {
     val nameF: Option[() => String] = nameFormat.map { nf =>
       val count = new AtomicLong(0)
       () => nf.format(count.getAndDecrement)
