@@ -11,7 +11,7 @@ object ThreadFactoryBuilder {
   def apply(): ThreadFactoryBuilder = ThreadFactoryBuilder(None, None, None, None, true)
 
   def apply(groupName: String, threadName: String): ThreadFactoryBuilder = {
-    val group = ThreadGroupBuilder().withName(group).build()
+    val group = ThreadGroupBuilder().withName(groupName).build()
     ThreadFactoryBuilder().withNameFormat(threadName + "-%s").withThreadGroup(group)
   }
 }
