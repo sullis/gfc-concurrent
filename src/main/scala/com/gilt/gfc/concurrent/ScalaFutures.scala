@@ -3,8 +3,8 @@ package com.gilt.gfc.concurrent
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import scala.annotation.tailrec
-import scala.concurrent.duration.{FiniteDuration, Duration}
-import scala.concurrent.{Promise, ExecutionContext, Await, Future}
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.{Promise, ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -15,16 +15,6 @@ import scala.util.{Failure, Success, Try}
  */
 object ScalaFutures {
   implicit class FutureOps[A](val f: Future[A]) extends AnyVal {
-    /**
-     * Await the result of this Future
-     */
-    @inline def await: A = Await.result(f, Duration.Inf)
-
-    /**
-     * Await the result of this Future
-     */
-    @inline def await(duration: Duration): A = Await.result(f, duration)
-
     /**
      * Create a new Future that times out with a [[java.util.concurrent.TimeoutException]] after the given FiniteDuration
      */
@@ -41,23 +31,20 @@ object ScalaFutures {
    */
   def exists[T](futures: TraversableOnce[Future[T]])
                (predicate: T => Boolean)
-               (implicit executor: ExecutionContext): Future[Boolean] = Future.find(futures)(predicate).map(_.isDefined)
+               (implicit executor: ExecutionContext): Future[Boolean] = {
+    if (futures.isEmpty) Future.successful(false)
+    else Future.find(futures)(predicate).map(_.isDefined)
+  }
 
   /**
    * Asynchronously tests whether a predicate holds for all elements of a collection of futures
    */
   def forall[T](futures: TraversableOnce[Future[T]])
                (predicate: T => Boolean)
-               (implicit executor: ExecutionContext): Future[Boolean] = Future.find(futures)(!predicate(_)).map(_.isEmpty)
-
-  /**
-   * Asynchronously compare the results of two futures
-   */
-  def eq[A](f1: Future[_ >: A], f2: Future[_ >: A])
-           (implicit executor: ExecutionContext): Future[Boolean] = for {
-    one <- f1
-    two <- f2
-  } yield(one == two)
+               (implicit executor: ExecutionContext): Future[Boolean] = {
+    if (futures.isEmpty) Future.successful(true)
+    else Future.find(futures)(!predicate(_)).map(_.isEmpty)
+  }
 
   /**
    * Future of an empty Option

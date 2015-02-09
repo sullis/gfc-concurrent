@@ -14,13 +14,6 @@ This object contains a bunch of sugar and little helpers that make working with 
     import com.gilt.gfc.concurrent.ScalaFutures._
     val futureWithTimeout = myFuture.withTimeout(1 minute)
 ```
-* Await the result of a Future, without the awkwardness of Await.result
-```
-    import scala.concurrent.duration._
-    import com.gilt.gfc.concurrent.ScalaFutures._
-    myFuture.await // with infinite duration
-    myFuture.await(1 minute)
-```
 * Higher-order functions missing in the scala.concurrent.Future object:
 ```
     // Asynchronously tests whether a predicate holds for some of the elements of a collection of futures
@@ -31,12 +24,6 @@ This object contains a bunch of sugar and little helpers that make working with 
     // Asynchronously tests whether a predicate holds for all elements of a collection of futures
     val futures: Seq[Future[String]] = ???
     ScalaFutures.forall(futures, _.contains("x"))
-```
-```
-    // Asynchronously compare the results of two futures
-    val aFuture: Future[String] = ???
-    val bFuture: Future[String] = ???
-    val eqFuture: Future[Boolean] = ScalaFutures.eq(aFuture, bFuture)
 ```
 * Enhanced fold that fails fast, as soon as a Future in the input collection fails:
 ```
