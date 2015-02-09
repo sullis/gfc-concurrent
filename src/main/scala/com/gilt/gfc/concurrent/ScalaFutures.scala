@@ -14,40 +14,67 @@ import scala.util.{Failure, Success, Try}
  * @since 11/Jul/2014 13:25
  */
 object ScalaFutures {
-  implicit class AwaitableFuture[A](val f: Future[A]) extends AnyVal {
+  implicit class FutureOps[A](val f: Future[A]) extends AnyVal {
+    /**
+     * Await the result of this Future
+     */
     @inline def await: A = Await.result(f, Duration.Inf)
+
+    /**
+     * Await the result of this Future
+     */
+    @inline def await(duration: Duration): A = Await.result(f, duration)
+
+    /**
+     * Create a new Future that times out with a [[java.util.concurrent.TimeoutException]] after the given FiniteDuration
+     */
+    def withTimeout(after: FiniteDuration)(implicit ec: ExecutionContext): Future[A] =
+      Future.firstCompletedOf(Seq(f, Timeouts.timeout(after)))
   }
 
   implicit class AsFuture[A](val a: A) extends AnyVal {
     @inline def asFuture: Future[A] = Future.successful(a)
   }
 
-  implicit class TimeLimitedFuture[T](val future: Future[T]) extends AnyVal {
-    def withTimeout(after: FiniteDuration)(implicit ec: ExecutionContext): Future[T] =
-      Future.firstCompletedOf(Seq(future, Timeouts.timeout(after)))
-  }
-
+  /**
+   * Asynchronously tests whether a predicate holds for some of the elements of a collection of futures
+   */
   def exists[T](futures: TraversableOnce[Future[T]])
                (predicate: T => Boolean)
                (implicit executor: ExecutionContext): Future[Boolean] = Future.find(futures)(predicate).map(_.isDefined)
 
+  /**
+   * Asynchronously tests whether a predicate holds for all elements of a collection of futures
+   */
   def forall[T](futures: TraversableOnce[Future[T]])
                (predicate: T => Boolean)
                (implicit executor: ExecutionContext): Future[Boolean] = Future.find(futures)(!predicate(_)).map(_.isEmpty)
 
+  /**
+   * Asynchronously compare the results of two futures
+   */
   def eq[A](f1: Future[_ >: A], f2: Future[_ >: A])
            (implicit executor: ExecutionContext): Future[Boolean] = for {
     one <- f1
     two <- f2
   } yield(one == two)
 
+  /**
+   * Future of an empty Option
+   */
   val FutureNone: Future[Option[Nothing]] = Future.successful(None)
 
+  /**
+   * Convert a Try into a Future
+   */
   def fromTry[T](t: Try[T]): Future[T] = t match {
     case Success(s) => Future.successful(s)
     case Failure(e) => Future.failed(e)
   }
 
+  /**
+   * Improved version of [[scala.concurrent.Future.fold]], that fails the resulting Future as soon as one of the input Futures fails.
+   */
   def foldFast[T, R >: T](futures: TraversableOnce[Future[T]])(zero: R)(foldFun: (R, T) => R)(implicit executor: ExecutionContext): Future[R] = {
     if (futures.isEmpty) Future.successful(zero)
     else {
