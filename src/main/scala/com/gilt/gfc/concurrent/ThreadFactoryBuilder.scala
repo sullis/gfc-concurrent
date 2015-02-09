@@ -2,18 +2,24 @@ package com.gilt.gfc.concurrent
 
 import java.lang.Thread.UncaughtExceptionHandler
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.{Executors, ThreadFactory}
+import java.util.concurrent.ThreadFactory
 
 /**
  * Simple ThreadFactoryBuilder, analogous to guava ThreadFactoryBuilder
  */
 object ThreadFactoryBuilder {
-  def apply(): ThreadFactoryBuilder = ThreadFactoryBuilder(None, None, None, Executors.defaultThreadFactory, true)
+  def apply(): ThreadFactoryBuilder = ThreadFactoryBuilder(None, None, None, None, true)
+
+  def apply(groupName: String, threadName: String): ThreadFactoryBuilder = {
+    val group = ThreadGroupBuilder().withName(group).build()
+    ThreadFactoryBuilder().withNameFormat(threadName + "-%s").withThreadGroup(group)
+  }
 }
+
 case class ThreadFactoryBuilder private (private val nameFormat: Option[String],
                                          private val priority: Option[Int],
                                          private val exceptionHandler: Option[UncaughtExceptionHandler],
-                                         private val threadFactory: ThreadFactory,
+                                         private val threadGroup: Option[ThreadGroup],
                                          private val daemon: Boolean) {
   def withNameFormat(nameFormat: String): ThreadFactoryBuilder = copy(nameFormat = Some(nameFormat))
 
@@ -21,7 +27,7 @@ case class ThreadFactoryBuilder private (private val nameFormat: Option[String],
 
   def withUncaughtExceptionHandler(exceptionHandler: UncaughtExceptionHandler): ThreadFactoryBuilder = copy(exceptionHandler = Some(exceptionHandler))
 
-  def withThreadFactory(threadFactory: ThreadFactory): ThreadFactoryBuilder = copy(threadFactory = threadFactory)
+  def withThreadGroup(threadGroup: ThreadGroup): ThreadFactoryBuilder = copy(threadGroup = Some(threadGroup))
 
   def withDaemonFlag(isDaemon: Boolean): ThreadFactoryBuilder = copy(daemon = isDaemon)
 
@@ -33,7 +39,7 @@ case class ThreadFactoryBuilder private (private val nameFormat: Option[String],
 
     new ThreadFactory {
       override def newThread(runnable: Runnable): Thread = {
-        val thread = threadFactory.newThread(runnable)
+        val thread = threadGroup.fold(new Thread(runnable))(new Thread(_, runnable))
         nameF.foreach(f => thread.setName(f()))
         priority.foreach(thread.setPriority)
         exceptionHandler.foreach(thread.setUncaughtExceptionHandler)
