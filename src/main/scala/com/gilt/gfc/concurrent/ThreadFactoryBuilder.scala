@@ -4,6 +4,8 @@ import java.lang.Thread.UncaughtExceptionHandler
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.ThreadFactory
 
+import com.gilt.gfc.logging.Loggable
+
 /**
  * Simple ThreadFactoryBuilder, analogous to guava ThreadFactoryBuilder
  */
@@ -13,6 +15,12 @@ object ThreadFactoryBuilder {
   def apply(groupName: String, threadName: String): ThreadFactoryBuilder = {
     val group = ThreadGroupBuilder().withName(groupName).build()
     ThreadFactoryBuilder().withNameFormat(threadName + "-%s").withThreadGroup(group)
+  }
+
+  val LogUncaughtExceptionHandler = new Thread.UncaughtExceptionHandler with Loggable {
+    override def uncaughtException(t: Thread, e: Throwable): Unit = {
+      error("Failed to catch exception in thread " + t.getName(), e)
+    }
   }
 }
 
