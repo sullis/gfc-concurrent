@@ -13,6 +13,12 @@ libraryDependencies ++= Seq(
   "org.mockito" % "mockito-core" % "1.10.19" % "test"
 )
 
+releaseSettings
+
+ReleaseKeys.crossBuild := true
+
+ReleaseKeys.publishArtifactsAction := PgpKeys.publishSigned.value
+
 publishMavenStyle := true
 
 publishTo := {
