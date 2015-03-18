@@ -1,10 +1,12 @@
 package com.gilt.gfc.concurrent
 
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import scala.annotation.tailrec
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 import scala.concurrent.{Promise, ExecutionContext, Future}
+import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -88,6 +90,40 @@ object ScalaFutures {
       }}
 
       promise.future
+    }
+  }
+
+  def withRetry[T](maxRetryTimes: Long = Long.MaxValue)(f: => Future[T]): Future[T] = {
+    if(maxRetryTimes <= 0) {
+      f
+    } else {
+      f.recoverWith {
+        case NonFatal => withRetry(maxRetryTimes - 1)(f)
+      }
+    }
+  }
+
+  def withExponentialRetry[T](maxRetryTimes: Long = Long.MaxValue,
+                              initialDelay: Duration = 1 nanosecond,
+                              maxDelay: FiniteDuration = 1 day,
+                              exponentFactor: Double = 2)
+                             (f: => Future[T]): Future[T] = {
+    if (maxRetryTimes <= 0) {
+      f
+    } else {
+      f.recoverWith {
+        case NonFatal =>
+          val p = Promise[T]
+
+          val delay = if (initialDelay > maxDelay) { maxDelay } else { initialDelay }
+          Timeouts.scheduledExecutor.schedule(new Runnable() {
+            override def run() {
+              p.completeWith(withExponentialRetry(maxRetryTimes - 1, delay * exponentFactor, maxDelay, exponentFactor)(f))
+            }
+          }, delay.toNanos, TimeUnit.NANOSECONDS)
+
+          p.future
+      }
     }
   }
 

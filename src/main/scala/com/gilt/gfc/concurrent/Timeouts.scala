@@ -12,7 +12,7 @@ import scala.concurrent.duration.FiniteDuration
  * @since 22-Nov-2014
  */
 object Timeouts {
-  private val scheduledExecutor = Executors.newSingleThreadScheduledExecutor()
+  private[concurrent] val scheduledExecutor = Executors.newSingleThreadScheduledExecutor()
 
   /**
    * Returns a timinig out Future.
