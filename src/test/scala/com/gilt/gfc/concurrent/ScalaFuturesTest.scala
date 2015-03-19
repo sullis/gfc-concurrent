@@ -1,6 +1,7 @@
 package com.gilt.gfc.concurrent
 
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.{AtomicInteger, AtomicBoolean}
+import scala.collection.immutable.VectorBuilder
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.util.Try
@@ -120,5 +121,76 @@ class ScalaFuturesTest extends FunSuite with Matchers {
 
     f.isCompleted should be(true)
     toggle.get() should be(true)
+  }
+
+  test("withRetry should retry future until it succeeds") {
+    import ScalaFutures.Implicits.sameThreadExecutionContext
+
+    val futures = Iterator(Future.failed(new Exception("boom")), Future.failed(new Exception("crash")), Future.successful("foo"), Future.successful("bar"))
+
+    await(ScalaFutures.withRetry()(futures.next)) shouldBe "foo"
+  }
+
+  test("withRetry should retry until maxRetries") {
+    import ScalaFutures.Implicits.sameThreadExecutionContext
+
+    val futures = Iterator(Future.failed(new Exception("boom")), Future.failed(new Exception("crash")), Future.successful("foo"), Future.successful("bar"))
+
+    val thrown = the [Exception] thrownBy { await(ScalaFutures.withRetry(1)(futures.next)) }
+    thrown.getMessage shouldBe "crash"
+  }
+
+  test("withExponentialRetry should retry future until it succeeds") {
+    import ScalaFutures.Implicits.sameThreadExecutionContext
+
+    val futures = Iterator(Future.failed(new Exception("boom")), Future.failed(new Exception("crash")), Future.successful("foo"), Future.successful("bar"))
+
+    await(ScalaFutures.withExponentialRetry()(futures.next)) shouldBe "foo"
+  }
+
+  test("withExponentialRetry should retry until maxRetries") {
+    import ScalaFutures.Implicits.sameThreadExecutionContext
+
+    val futures = Iterator(Future.failed(new Exception("boom")), Future.failed(new Exception("crash")), Future.successful("foo"), Future.successful("bar"))
+
+    val thrown = the [Exception] thrownBy { await(ScalaFutures.withExponentialRetry(1)(futures.next)) }
+    thrown.getMessage shouldBe "crash"
+  }
+
+  test("withExponentialRetry should apply exponential backoff") {
+    val times = new VectorBuilder[Long]
+
+    val counter = new AtomicInteger(0)
+    def nextFuture: Future[String] = {
+      val c = counter.incrementAndGet()
+      times += System.currentTimeMillis()
+      if (c >= 7) {
+        Future.successful("ok")
+      } else {
+        Future.failed(new Exception(s"error $c"))
+      }
+    }
+
+    import ScalaFutures.Implicits.sameThreadExecutionContext
+    import scala.concurrent.duration._
+
+    times += System.currentTimeMillis()
+
+    // Delay series should be (ms): 100, 150, 225, 337, 500, 500
+    val future = ScalaFutures.withExponentialRetry(initialDelay = 100 millis,
+                                                   maxDelay = 500 millis,
+                                                   exponentFactor = 1.5)(nextFuture)
+
+    await(future) shouldBe "ok"
+
+    val timeDeltas = times.result().sliding(2).map(v => v(1) - v(0)).toList
+    timeDeltas.length shouldBe 7
+    timeDeltas(0) shouldBe 20L  +- 20L
+    timeDeltas(1) shouldBe 120L +- 20L
+    timeDeltas(2) shouldBe 170L +- 20L
+    timeDeltas(3) shouldBe 245L +- 20L
+    timeDeltas(4) shouldBe 357L +- 20L
+    timeDeltas(5) shouldBe 520L +- 20L
+    timeDeltas(6) shouldBe 520L +- 20L
   }
 }

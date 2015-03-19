@@ -93,12 +93,14 @@ object ScalaFutures {
     }
   }
 
-  def withRetry[T](maxRetryTimes: Long = Long.MaxValue)(f: => Future[T]): Future[T] = {
+  def withRetry[T](maxRetryTimes: Long = Long.MaxValue)
+                  (f: => Future[T])
+                  (implicit ec: ExecutionContext): Future[T] = {
     if(maxRetryTimes <= 0) {
       f
     } else {
       f.recoverWith {
-        case NonFatal => withRetry(maxRetryTimes - 1)(f)
+        case NonFatal(e) => withRetry(maxRetryTimes - 1)(f)
       }
     }
   }
@@ -107,12 +109,14 @@ object ScalaFutures {
                               initialDelay: Duration = 1 nanosecond,
                               maxDelay: FiniteDuration = 1 day,
                               exponentFactor: Double = 2)
-                             (f: => Future[T]): Future[T] = {
+                             (f: => Future[T])
+                             (implicit ec: ExecutionContext): Future[T] = {
+    require(exponentFactor >= 1)
     if (maxRetryTimes <= 0) {
       f
     } else {
       f.recoverWith {
-        case NonFatal =>
+        case NonFatal(e) =>
           val p = Promise[T]
 
           val delay = if (initialDelay > maxDelay) { maxDelay } else { initialDelay }
