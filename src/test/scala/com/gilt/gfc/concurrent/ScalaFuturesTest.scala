@@ -140,24 +140,24 @@ class ScalaFuturesTest extends FunSuite with Matchers {
     thrown.getMessage shouldBe "crash"
   }
 
-  test("withExponentialRetry should retry future until it succeeds") {
+  test("retryWithExponentialDelay should retry future until it succeeds") {
     import ScalaFutures.Implicits.sameThreadExecutionContext
 
     val futures = Iterator(Future.failed(new Exception("boom")), Future.failed(new Exception("crash")), Future.successful("foo"), Future.successful("bar"))
 
-    await(ScalaFutures.retryWithExponentialBackoff()(futures.next)) shouldBe "foo"
+    await(ScalaFutures.retryWithExponentialDelay()(futures.next)) shouldBe "foo"
   }
 
-  test("retryWithExponentialBackoff should retry until maxRetries") {
+  test("retryWithExponentialDelay should retry until maxRetries") {
     import ScalaFutures.Implicits.sameThreadExecutionContext
 
     val futures = Iterator(Future.failed(new Exception("boom")), Future.failed(new Exception("crash")), Future.successful("foo"), Future.successful("bar"))
 
-    val thrown = the [Exception] thrownBy { await(ScalaFutures.retryWithExponentialBackoff(1)(futures.next)) }
+    val thrown = the [Exception] thrownBy { await(ScalaFutures.retryWithExponentialDelay(1)(futures.next)) }
     thrown.getMessage shouldBe "crash"
   }
 
-  test("retryWithExponentialBackoff should apply exponential backoff") {
+  test("retryWithExponentialDelay should apply exponential backoff") {
     val times = new VectorBuilder[Long]
 
     val counter = new AtomicInteger(0)
@@ -177,9 +177,9 @@ class ScalaFuturesTest extends FunSuite with Matchers {
     times += System.currentTimeMillis()
 
     // Delay series should be (ms): 100, 150, 225, 337, 500, 500
-    val future = ScalaFutures.retryWithExponentialBackoff(initialDelay = 100 millis,
-                                                          maxDelay = 500 millis,
-                                                          exponentFactor = 1.5)(nextFuture)
+    val future = ScalaFutures.retryWithExponentialDelay(initialDelay = 100 millis,
+                                                        maxDelay = 500 millis,
+                                                        exponentFactor = 1.5)(nextFuture)
 
     await(future) shouldBe "ok"
 
