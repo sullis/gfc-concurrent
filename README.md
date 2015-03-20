@@ -29,7 +29,7 @@ This object contains a bunch of sugar and little helpers that make working with 
     // Retry the remote call up to 10 times until it succeeds, with an exponential backoff,
     // starting at 10 ms and doubling each iteration until it reaches 1 second, i.e.
     // 10ms, 20ms, 40ms, 80ms, 160ms, 320ms, 640ms, 1s, 1s, 1s
-    val response: Future[Response] = retryWithExponentialDelay(10, 10 millis, 1 minute, 2)(remoteCall)
+    val response: Future[Response] = retryWithExponentialDelay(10, 10 millis, 1 second, 2)(remoteCall)
 ```
 * Higher-order functions missing in the scala.concurrent.Future object:
 ```
