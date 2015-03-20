@@ -1,10 +1,12 @@
 package com.gilt.gfc.concurrent
 
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import scala.annotation.tailrec
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 import scala.concurrent.{Promise, ExecutionContext, Future}
+import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -88,6 +90,66 @@ object ScalaFutures {
       }}
 
       promise.future
+    }
+  }
+
+  /**
+   * Retries a Future until it succeeds or a maximum number of retries has been reached.
+   *
+   * @param maxRetryTimes The maximum number of retries, defaults to Long.MaxValue
+   * @param f A function that returns a new Future
+   * @param ec The ExecutionContext on which to retry the Future if it failed.
+   * @return A successful Future if the Future succeeded within maxRetryTimes or a failed Future otherwise.
+   */
+  def retry[T](maxRetryTimes: Long = Long.MaxValue)
+              (f: => Future[T])
+              (implicit ec: ExecutionContext): Future[T] = {
+    if(maxRetryTimes <= 0) {
+      f
+    } else {
+      f.recoverWith {
+        case NonFatal(e) => retry(maxRetryTimes - 1)(f)
+      }
+    }
+  }
+
+
+  /**
+   * Retries a Future until it succeeds or a maximum number of retries has been reached,
+   * with each retry iteration being delayed. The delay grows exponentially from a given start value
+   * and by a given factor until it reaches a given maxiumum delay value.
+   *
+   * @param maxRetryTimes The maximum number of retries, defaults to Long.MaxValue
+   * @param initialDelay The initial delay value, defaults to 1 nanosecond
+   * @param maxDelay The maximum delay value, defaults to 1 day
+   * @param exponentFactor The factor by which the delay increases between retry iterations
+   * @param f A function that returns a new Future
+   * @param ec The ExecutionContext on which to retry the Future if it failed.
+   * @return A successful Future if the Future succeeded within maxRetryTimes or a failed Future otherwise.
+   */
+  def retryWithExponentialDelay[T](maxRetryTimes: Long = Long.MaxValue,
+                                   initialDelay: Duration = 1 nanosecond,
+                                   maxDelay: FiniteDuration = 1 day,
+                                   exponentFactor: Double = 2)
+                                  (f: => Future[T])
+                                  (implicit ec: ExecutionContext): Future[T] = {
+    require(exponentFactor >= 1)
+    if (maxRetryTimes <= 0) {
+      f
+    } else {
+      f.recoverWith {
+        case NonFatal(e) =>
+          val p = Promise[T]
+
+          val delay = if (initialDelay > maxDelay) { maxDelay } else { initialDelay }
+          Timeouts.scheduledExecutor.schedule(new Runnable() {
+            override def run() {
+              p.completeWith(retryWithExponentialDelay(maxRetryTimes - 1, delay * exponentFactor, maxDelay, exponentFactor)(f))
+            }
+          }, delay.toNanos, TimeUnit.NANOSECONDS)
+
+          p.future
+      }
     }
   }
 
