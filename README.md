@@ -14,6 +14,23 @@ This object contains a bunch of sugar and little helpers that make working with 
     import com.gilt.gfc.concurrent.ScalaFutures._
     val futureWithTimeout = myFuture.withTimeout(1 minute)
 ```
+* Retry a Future until it succeeds, with or without delay:
+```
+    import scala.concurrent.duration._
+    import com.gilt.gfc.concurrent.ScalaFutures._
+    def remoteCall: Future[Response] = ???
+    // Retry the remote call up to 10 times until it succeeds
+    val response: Future[Response] = retry(10)(remoteCall)
+```
+```
+    import scala.concurrent.duration._
+    import com.gilt.gfc.concurrent.ScalaFutures._
+    def remoteCall: Future[Response] = ???
+    // Retry the remote call up to 10 times until it succeeds, with an exponential backoff,
+    // starting at 10 ms and doubling each iteration until it reaches 1 second, i.e.
+    // 10ms, 20ms, 40ms, 80ms, 160ms, 320ms, 640ms, 1s, 1s, 1s
+    val response: Future[Response] = retryWithExponentialBackoff(10, 10 millis, 1 minute, 2)(remoteCall)
+```
 * Higher-order functions missing in the scala.concurrent.Future object:
 ```
     // Asynchronously tests whether a predicate holds for some of the elements of a collection of futures

@@ -93,24 +93,46 @@ object ScalaFutures {
     }
   }
 
-  def withRetry[T](maxRetryTimes: Long = Long.MaxValue)
-                  (f: => Future[T])
-                  (implicit ec: ExecutionContext): Future[T] = {
+  /**
+   * Retries a Future until it succeeds or a maximum number of retries has been reached.
+   *
+   * @param maxRetryTimes The maximum number of retries, defaults to Long.MaxValue
+   * @param f A function that returns a new Future
+   * @param ec The ExecutionContext on which to retry the Future if it failed.
+   * @return A successful Future if the Future succeeded within maxRetryTimes or a failed Future otherwise.
+   */
+  def retry[T](maxRetryTimes: Long = Long.MaxValue)
+              (f: => Future[T])
+              (implicit ec: ExecutionContext): Future[T] = {
     if(maxRetryTimes <= 0) {
       f
     } else {
       f.recoverWith {
-        case NonFatal(e) => withRetry(maxRetryTimes - 1)(f)
+        case NonFatal(e) => retry(maxRetryTimes - 1)(f)
       }
     }
   }
 
-  def withExponentialRetry[T](maxRetryTimes: Long = Long.MaxValue,
-                              initialDelay: Duration = 1 nanosecond,
-                              maxDelay: FiniteDuration = 1 day,
-                              exponentFactor: Double = 2)
-                             (f: => Future[T])
-                             (implicit ec: ExecutionContext): Future[T] = {
+
+  /**
+   * Retries a Future until it succeeds or a maximum number of retries has been reached,
+   * with each retry iteration being delayed. The delay grows exponentially from a given start value
+   * and by a given factor until it reaches a given maxiumum delay value.
+   *
+   * @param maxRetryTimes The maximum number of retries, defaults to Long.MaxValue
+   * @param initialDelay The initial delay value, defaults to 1 nanosecond
+   * @param maxDelay The maximum delay value, defaults to 1 day
+   * @param exponentFactor The factor by which the delay increases between retry iterations
+   * @param f A function that returns a new Future
+   * @param ec The ExecutionContext on which to retry the Future if it failed.
+   * @return A successful Future if the Future succeeded within maxRetryTimes or a failed Future otherwise.
+   */
+  def retryWithExponentialBackoff[T](maxRetryTimes: Long = Long.MaxValue,
+                                     initialDelay: Duration = 1 nanosecond,
+                                     maxDelay: FiniteDuration = 1 day,
+                                     exponentFactor: Double = 2)
+                                    (f: => Future[T])
+                                    (implicit ec: ExecutionContext): Future[T] = {
     require(exponentFactor >= 1)
     if (maxRetryTimes <= 0) {
       f
@@ -122,7 +144,7 @@ object ScalaFutures {
           val delay = if (initialDelay > maxDelay) { maxDelay } else { initialDelay }
           Timeouts.scheduledExecutor.schedule(new Runnable() {
             override def run() {
-              p.completeWith(withExponentialRetry(maxRetryTimes - 1, delay * exponentFactor, maxDelay, exponentFactor)(f))
+              p.completeWith(retryWithExponentialBackoff(maxRetryTimes - 1, delay * exponentFactor, maxDelay, exponentFactor)(f))
             }
           }, delay.toNanos, TimeUnit.NANOSECONDS)
 
