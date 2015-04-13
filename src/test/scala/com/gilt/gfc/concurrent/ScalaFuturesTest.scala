@@ -9,6 +9,7 @@ import org.scalatest.FunSuite
 import org.scalatest.Matchers
 
 class ScalaFuturesTest extends FunSuite with Matchers {
+  implicit def logSuppressor(t: Throwable): Unit = {}
 
   import ScalaFutures._
 
@@ -170,7 +171,7 @@ class ScalaFuturesTest extends FunSuite with Matchers {
     val thrown = the [Exception] thrownBy { await(ScalaFutures.retryWithExponentialDelay(maxRetryTimeout = 100 millis fromNow)(function)) }
     thrown.getMessage shouldBe "boom"
     (System.currentTimeMillis() - start) should be (120L +- 20L)
-    count shouldBe 28
+    count shouldBe (8 +- 1)
   }
 
   test("retryWithExponentialDelay should apply exponential backoff") {
