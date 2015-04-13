@@ -2,7 +2,7 @@ package com.gilt.gfc.concurrent
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicBoolean}
 import scala.collection.immutable.VectorBuilder
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import scala.util.Try
 import org.scalatest.FunSuite
@@ -148,13 +148,29 @@ class ScalaFuturesTest extends FunSuite with Matchers {
     await(ScalaFutures.retryWithExponentialDelay()(futures.next)) shouldBe "foo"
   }
 
-  test("retryWithExponentialDelay should retry until maxRetries") {
+  test("retryWithExponentialDelay should retry until maxRetryTimes") {
     import ScalaFutures.Implicits.sameThreadExecutionContext
 
     val futures = Iterator(Future.failed(new Exception("boom")), Future.failed(new Exception("crash")), Future.successful("foo"), Future.successful("bar"))
 
-    val thrown = the [Exception] thrownBy { await(ScalaFutures.retryWithExponentialDelay(1)(futures.next)) }
+    val thrown = the [Exception] thrownBy { await(ScalaFutures.retryWithExponentialDelay(maxRetryTimes = 1)(futures.next)) }
     thrown.getMessage shouldBe "crash"
+  }
+
+  test("retryWithExponentialDelay should retry until maxRetryTimeout") {
+    import ScalaFutures.Implicits.sameThreadExecutionContext
+
+    var count = 0
+    def function = {
+      count += 1
+      Future.failed(new Exception("boom"))
+    }
+
+    val start = System.currentTimeMillis()
+    val thrown = the [Exception] thrownBy { await(ScalaFutures.retryWithExponentialDelay(maxRetryTimeout = 100 millis fromNow)(function)) }
+    thrown.getMessage shouldBe "boom"
+    (System.currentTimeMillis() - start) should be (120L +- 20L)
+    count shouldBe 28
   }
 
   test("retryWithExponentialDelay should apply exponential backoff") {

@@ -115,11 +115,14 @@ object ScalaFutures {
 
 
   /**
-   * Retries a Future until it succeeds or a maximum number of retries has been reached,
-   * with each retry iteration being delayed. The delay grows exponentially from a given start value
-   * and by a given factor until it reaches a given maxiumum delay value.
+   * Retries a Future until it succeeds or a maximum number of retries has been reached, or a retry timeout
+   * has been reached. Each retry iteration is being exponentially delayed. The delay grows from a given start value
+   * and by a given factor until it reaches a given maximum delay value. If maxRetryTimeout is reached, the last
+   * Future is scheduled at the point of the timeout. E.g. if the initial delay is 1 second, the retry timeout 10 seconds
+   * and all other parameters at their default, the future will be retried after 1, 3 (=1+2), 7 (=1+2+4) and 10 seconds before it fails.
    *
    * @param maxRetryTimes The maximum number of retries, defaults to Long.MaxValue
+   * @param maxRetryTimeout The retry Deadline until which to retry the Future, defaults to 1 day from now
    * @param initialDelay The initial delay value, defaults to 1 nanosecond
    * @param maxDelay The maximum delay value, defaults to 1 day
    * @param exponentFactor The factor by which the delay increases between retry iterations
@@ -128,23 +131,24 @@ object ScalaFutures {
    * @return A successful Future if the Future succeeded within maxRetryTimes or a failed Future otherwise.
    */
   def retryWithExponentialDelay[T](maxRetryTimes: Long = Long.MaxValue,
+                                   maxRetryTimeout: Deadline = 1 day fromNow,
                                    initialDelay: Duration = 1 nanosecond,
                                    maxDelay: FiniteDuration = 1 day,
                                    exponentFactor: Double = 2)
                                   (f: => Future[T])
                                   (implicit ec: ExecutionContext): Future[T] = {
     require(exponentFactor >= 1)
-    if (maxRetryTimes <= 0) {
+    if (maxRetryTimes <= 0 || maxRetryTimeout.isOverdue()) {
       f
     } else {
       f.recoverWith {
         case NonFatal(e) =>
           val p = Promise[T]
 
-          val delay = if (initialDelay > maxDelay) { maxDelay } else { initialDelay }
+          val delay = Seq(initialDelay, maxDelay, maxRetryTimeout.timeLeft).min
           Timeouts.scheduledExecutor.schedule(new Runnable() {
             override def run() {
-              p.completeWith(retryWithExponentialDelay(maxRetryTimes - 1, delay * exponentFactor, maxDelay, exponentFactor)(f))
+              p.completeWith(retryWithExponentialDelay(maxRetryTimes - 1, maxRetryTimeout, delay * exponentFactor, maxDelay, exponentFactor)(f))
             }
           }, delay.toNanos, TimeUnit.NANOSECONDS)
 
