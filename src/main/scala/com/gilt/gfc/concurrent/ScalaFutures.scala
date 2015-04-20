@@ -62,7 +62,7 @@ object ScalaFutures {
   }
 
   /**
-   * Convert Exceptions thrown by F into a failed Future
+   * Turn Exceptions thrown by f into a failed Future
    */
   def safely[T](f: => Future[T]): Future[T] = Try(f) match {
     case Success(s) => s
@@ -159,11 +159,7 @@ object ScalaFutures {
         val delay = Seq(initialDelay, maxDelay, maxRetryTimeout.timeLeft).min
         Timeouts.scheduledExecutor.schedule(new Runnable() {
           override def run() {
-            //              p.completeWith(retryWithExponentialDelay(maxRetryTimes - 1, maxRetryTimeout, delay * exponentFactor, maxDelay, exponentFactor)(f))
-            Try(retryWithExponentialDelay(maxRetryTimes - 1, maxRetryTimeout, delay * exponentFactor, maxDelay, exponentFactor)(f)) match {
-              case Success(future) => p.completeWith(future)
-              case Failure(t) => p.failure(t)
-            }
+            p.completeWith(retryWithExponentialDelay(maxRetryTimes - 1, maxRetryTimeout, delay * exponentFactor, maxDelay, exponentFactor)(f))
           }
         }, delay.toNanos, TimeUnit.NANOSECONDS)
 
