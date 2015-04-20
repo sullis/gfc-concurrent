@@ -141,6 +141,20 @@ class ScalaFuturesTest extends FunSuite with Matchers {
     thrown.getMessage shouldBe "crash"
   }
 
+  test("retry retries if future function throws") {
+    val counter = new AtomicInteger(0)
+    def nextFuture: Future[String] = {
+      counter.getAndIncrement match {
+        case 0 => Future.failed(new Exception("boom"))
+        case 1 => throw new Exception("bam")
+        case _ => Future.successful("ok")
+      }
+    }
+
+    import ScalaFutures.Implicits.sameThreadExecutionContext
+    await(ScalaFutures.retry()(nextFuture)) shouldBe "ok"
+  }
+
   test("retryWithExponentialDelay should retry future until it succeeds") {
     import ScalaFutures.Implicits.sameThreadExecutionContext
 
@@ -209,5 +223,19 @@ class ScalaFuturesTest extends FunSuite with Matchers {
     timeDeltas(4) shouldBe 357L +- 20L
     timeDeltas(5) shouldBe 520L +- 20L
     timeDeltas(6) shouldBe 520L +- 20L
+  }
+
+  test("retryWithExponentialDelay retries if future function throws") {
+    val counter = new AtomicInteger(0)
+    def nextFuture: Future[String] = {
+      counter.getAndIncrement match {
+        case 0 => Future.failed(new Exception("boom"))
+        case 1 => throw new Exception("bam")
+        case _ => Future.successful("ok")
+      }
+    }
+
+    import ScalaFutures.Implicits.sameThreadExecutionContext
+    await(ScalaFutures.retryWithExponentialDelay()(nextFuture)) shouldBe "ok"
   }
 }
