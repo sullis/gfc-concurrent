@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicBoolean}
 import scala.collection.immutable.VectorBuilder
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 import org.scalatest.FunSuite
 import org.scalatest.Matchers
 
@@ -18,6 +18,42 @@ class ScalaFuturesTest extends FunSuite with Matchers {
   test("implicit asFuture") {
     val future: Future[Int] = 1.asFuture
     await(future) should be(1)
+  }
+
+  test("implicit FutureTry flatten") {
+    import scala.concurrent.ExecutionContext.Implicits.global
+
+    val f1: Future[Try[String]] = Future.successful(Success("ok"))
+    val f2: Future[Try[String]] = Future.successful(Failure(new RuntimeException("boom")))
+    val f3: Future[Try[String]] = Future.failed(new RuntimeException("bang"))
+
+    await(f1.flatten) shouldBe "ok"
+
+    (the [RuntimeException] thrownBy {
+      await(f2.flatten)
+    }).getMessage shouldBe "boom"
+
+    (the [RuntimeException] thrownBy {
+      await(f3.flatten)
+    }).getMessage shouldBe "bang"
+  }
+
+  test("implicit FutureFuture flatten") {
+    import scala.concurrent.ExecutionContext.Implicits.global
+
+    val t1: Future[Future[String]] = Future.successful(Future.successful("ok"))
+    val t2: Future[Future[String]] = Future.successful(Future.failed(new RuntimeException("boom")))
+    val t3: Future[Future[String]] = Future.failed(new RuntimeException("bang"))
+
+    await(t1.flatten) shouldBe "ok"
+
+    (the [RuntimeException] thrownBy {
+      await(t2.flatten)
+    }).getMessage shouldBe "boom"
+
+    (the [RuntimeException] thrownBy {
+      await(t3.flatten)
+    }).getMessage shouldBe "bang"
   }
 
   test("exists") {
