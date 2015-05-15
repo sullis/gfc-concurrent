@@ -10,14 +10,14 @@ import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
 /**
- * A convenience wrapper around Future-based RPC calls.
+ * A convenience wrapper around Future-based calls.
  *
  * Typically we have an API that returns some Future[OpResult] and we need to set an operation timeout,
  * possibly provide a default value, possibly log how long it took for debugging, maybe retry.
  *
  * By default it builds a Future[Try[A]] from Future[A].
  * When default value is provided it builds Future[A] from Future[A].
- * At the very minimum it'll apply a mandatory timeout but you can add retry logic, RPC call tracer, etc.
+ * At the very minimum it'll apply a mandatory timeout but you can add retry logic, call tracer, etc.
  *
  * It is important to specify type A _at_the_time_of_creation_, type inference doesn't pick it up.
  * {{{
@@ -31,7 +31,7 @@ import scala.util.{Failure, Success, Try}
  *
  */
 case class FutureBuilder[A,R] private (
-  rpcCallName: String // this'll show up in wrapped exceptions and logs
+  callName: String // this'll show up in wrapped exceptions and logs
 
 , additionalMessage: String // this'll show up in wrapped exceptions and logs
 
@@ -43,7 +43,7 @@ case class FutureBuilder[A,R] private (
 // OTOH, when we don't have any defaults - we want to bubble that decision
 // up to a typesystem level. Scala doesn't have checked exceptions but
 // we can express a mandatory check with a Try[A] type.
-, rpcErrorHandler:             (=> Future[Try[A]]) => Future[R]
+, errorHandler:             (=> Future[Try[A]]) => Future[R]
 
 // As it happens some of the exceptions are actually data,
 // APIs that generate them expect users to implement some control flow around them.
@@ -67,7 +67,7 @@ case class FutureBuilder[A,R] private (
   /** Composes all the Future transformations, gives resulting Future back.
     * This is the only 'run' function here, so, effectively we insist on timeouts for all futures.
     *
-    * By default NonFatal RPC failures are caught and represented as a Try[A].
+    * By default NonFatal failures are caught and represented as a Try[A].
     * OTOH if a serviceErrorDefaultValue is provided than we log errors and default to that, result type remains A.
     *
     * @param after mandatory timeout we set on 'service call' Futures
@@ -89,18 +89,18 @@ case class FutureBuilder[A,R] private (
     }).run(rpcCall)
   }
 
-  /** Will return this value if RPC call fails or we fail to interpret results. */
+  /** Will return this value if a call fails or we fail to interpret results. */
   def withServiceErrorDefaultValue( v: A )
                                   : FutureBuilder[A,A] = {
 
     implicit val executor: ExecutionContext = ExecutionContext.Implicits.global
 
-    copy(rpcErrorHandler = { f =>
+    copy(errorHandler = { f =>
       f recover {
 
         // Un-expected exceptions
         case NonFatal(e) =>
-          blocking{ FutureBuilder.Logger.error(s"${rpcCallName}(${additionalMessage}): ${e.getMessage}", e) }
+          blocking{ FutureBuilder.Logger.error(s"${callName}(${additionalMessage}): ${e.getMessage}", e) }
           Success(v) // we have a default value to fill in in case of generic server errors
 
       } map {
@@ -131,10 +131,10 @@ case class FutureBuilder[A,R] private (
   }
 
 
-  /** Enables RPC call tracing via provided callback function.
+  /** Enables call tracing via provided callback function.
     * E.g. you can log call times or send metrics somewhere.
     *
-    * @param callTracer will be called with the results of an RPC call.
+    * @param callTracer will be called with the results of a call.
     */
   def withTraceCalls( callTracer: (FutureTrace) => Unit
                     ): FutureBuilder[A,R] = {
@@ -151,9 +151,9 @@ case class FutureBuilder[A,R] private (
         val dt = endTime - beginTime
 
         val trace = res match {
-          case Success(Success(_)) => FutureTrace(rpcCallName, additionalMessage, dt, None)
-          case Success(Failure(e)) => FutureTrace(rpcCallName, additionalMessage, dt, Some(FutureRecoverableErrorTrace(e)))
-          case Failure(e)      => FutureTrace(rpcCallName, additionalMessage, dt, Some(FutureGenericErrorTrace(e)))
+          case Success(Success(_)) => FutureTrace(callName, additionalMessage, dt, None)
+          case Success(Failure(e)) => FutureTrace(callName, additionalMessage, dt, Some(FutureRecoverableErrorTrace(e)))
+          case Failure(e)      => FutureTrace(callName, additionalMessage, dt, Some(FutureGenericErrorTrace(e)))
         }
 
         blocking {
@@ -177,7 +177,7 @@ case class FutureBuilder[A,R] private (
          ): Future[R] = {
 
     // order matters, e.g. we want to apply single call timeout before any retries
-    rpcErrorHandler(
+    errorHandler(
       addNumRetries(
         addTraceCalls(
           addSingleCallTimeout(
@@ -196,7 +196,7 @@ case class FutureBuilder[A,R] private (
 
     f transform (
       s = identity,
-      f = (t: Throwable) => new Exception(s"${rpcCallName}(${additionalMessage}): ${t.getMessage}", t)
+      f = (t: Throwable) => new Exception(s"${callName}(${additionalMessage}): ${t.getMessage}", t)
     )
   }
 
@@ -230,18 +230,18 @@ object FutureBuilder {
 
   /** Constructs FutureBuilder.
     *
-    * @param rpcCallName name of the RPC call, shows up in the logs and traces
+    * @param callName name of the future-based call, shows up in the logs and traces
     * @param additionalMessage some interesting identifying data, if any, e.g. user guid
     * @tparam A type the result
     */
-  def apply[A]( rpcCallName: String
+  def apply[A]( callName: String
               , additionalMessage: String = ""
               ): FutureBuilder[A, Try[A]] = {
 
     new FutureBuilder[A, Try[A]](
-      rpcCallName                 = rpcCallName
+      callName                    = callName
     , additionalMessage           = additionalMessage
-    , rpcErrorHandler             = defaultRPCErrorHandler[A] _
+    , errorHandler                = defaultErrorHandler[A] _
     , passThroughExceptionHandler = PartialFunction.empty
     , addNumRetries               = byNameId[A] _
     , addTraceCalls               = byNameId[A] _
@@ -261,8 +261,8 @@ object FutureBuilder {
 
 
   private
-  def defaultRPCErrorHandler[A](f: => Future[Try[A]]
-                               ): Future[Try[A]] = {
+  def defaultErrorHandler[A](f: => Future[Try[A]]
+                            ): Future[Try[A]] = {
 
     implicit val ec = com.gilt.gfc.concurrent.SameThreadExecutionContext
 
