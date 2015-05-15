@@ -175,13 +175,19 @@ object ScalaFutures {
             initialDelay
           }
         }
-        val thisDelay: Duration = Seq(jitteredDelay, maxDelay, maxRetryTimeout.timeLeft).min
+        val delayLimit = Seq(maxDelay, maxRetryTimeout.timeLeft).min
         Timeouts.scheduledExecutor.schedule(new Runnable() {
           override def run() {
-            val nextDelay: Duration = Seq(initialDelay, maxDelay, maxRetryTimeout.timeLeft).min * exponentFactor
-            p.completeWith(retryWithExponentialDelay(maxRetryTimes - 1, maxRetryTimeout, nextDelay, maxDelay, exponentFactor, jitter)(f))
+            p.completeWith(retryWithExponentialDelay(maxRetryTimes - 1,
+                                                     maxRetryTimeout,
+                                                     Seq(initialDelay,  delayLimit).min * exponentFactor,
+                                                     maxDelay,
+                                                     exponentFactor,
+                                                     jitter)(
+                                                     f)
+            )
           }
-        }, thisDelay.toNanos, TimeUnit.NANOSECONDS)
+        }, Seq(jitteredDelay, delayLimit).min.toNanos, TimeUnit.NANOSECONDS)
 
         p.future
     }
