@@ -9,8 +9,8 @@ import org.scalatest.mock.MockitoSugar
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.{postfixOps, reflectiveCalls}
+import scala.util.Success
 import scala.util.control.NonFatal
-import scalaz.{-\/, \/-}
 
 
 class FutureBuilderSpec
@@ -25,16 +25,16 @@ class FutureBuilderSpec
       FutureBuilder[String]("test").withTraceCalls(LogFutureTraces(_)).runWithTimeout(10 seconds) {
         delayResult(100 milliseconds)("foobar")
       }
-    } should === (\/-("foobar"))
+    } should === (Success("foobar"))
   }
 
 
   it should "not blow up when tracing timed out futures" in {
-    AwaitResult(10 seconds) {
+    (AwaitResult(10 seconds) {
       FutureBuilder[String]("test").withTraceCalls(LogFutureTraces(_)).runWithTimeout(10 seconds) {
         timeout(100 milliseconds)
       }
-    } leftMap(_.getMessage.startsWith("test(): Timeout after")) should === (-\/(true))
+    }).failed.get.getMessage should startWith("test(): Timeout after")
   }
 
 
@@ -65,14 +65,14 @@ class FutureBuilderSpec
   it should "make use of additional error message" in {
     var numTries = 0
 
-    AwaitResult(10 seconds) {
+    (AwaitResult(10 seconds) {
       FutureBuilder[String]("TEST: It's Ok!").
         withTraceCalls(LogFutureTraces(_)).
         runWithTimeout(10 seconds) {
           numTries = numTries + 1
           timeout(100 milliseconds)
         }
-    } leftMap(_.getMessage.startsWith("TEST: It's Ok!")) should === (-\/(true))
+    }).failed.get.getMessage should startWith("TEST: It's Ok!")
 
     numTries should ===(1) // we didn't ask for a retry, so, should only see 1 service call
   }
@@ -96,7 +96,7 @@ class FutureBuilderSpec
           }
         }
 
-    } should === (\/-("test"))
+    } should === (Success("test"))
 
     numTries should ===(2)
   }
@@ -107,7 +107,7 @@ class FutureBuilderSpec
     var numTries = 0
     var wasCalled = false
 
-    AwaitResult(10 seconds) {
+    (AwaitResult(10 seconds) {
 
       FutureBuilder[String]("test").
         withTraceCalls(LogFutureTraces(_)).
@@ -123,7 +123,7 @@ class FutureBuilderSpec
           }
       }
 
-    } leftMap(_.getMessage) should === (-\/("INTERESTING EXCEPTION"))
+    }).failed.get.getMessage should === ("INTERESTING EXCEPTION")
 
     wasCalled should === (true)
     numTries should === (1) // don't retry if we pass it through

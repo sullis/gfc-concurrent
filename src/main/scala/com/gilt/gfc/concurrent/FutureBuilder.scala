@@ -8,15 +8,14 @@ import scala.concurrent._
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
-import scalaz._
 
 /**
  * A convenience wrapper around Future-based RPC calls.
  *
  * Typically we have an API that returns some Future[OpResult] and we need to set an operation timeout,
- * possibly provide a default value, log how long it took for debugging, maybe retry.
+ * possibly provide a default value, possibly log how long it took for debugging, maybe retry.
  *
- * By default it builds a Future[Throwable \/ A] from Future[A].
+ * By default it builds a Future[Try[A]] from Future[A].
  * When default value is provided it builds Future[A] from Future[A].
  * At the very minimum it'll apply a mandatory timeout but you can add retry logic, RPC call tracer, etc.
  *
@@ -43,33 +42,32 @@ case class FutureBuilder[A,R] private (
 // i.e. Future[A] => Future[A]
 // OTOH, when we don't have any defaults - we want to bubble that decision
 // up to a typesystem level. Scala doesn't have checked exceptions but
-// it does have 'union' (e.g. Either) types, which are an FP alternative.
-, rpcErrorHandler:             (=> Future[Throwable \/ A]) => Future[R]
+// we can express a mandatory check with a Try[A] type.
+, rpcErrorHandler:             (=> Future[Try[A]]) => Future[R]
 
 // As it happens some of the exceptions are actually data,
-// e.g. subclasses of UserException are needed for registration control flow.
-// Would be much easier if these cases were encoded in the return type but we are where we are,
-// so, need to be able to pass some of them through unwrapped and avoid running 'retry' logic in those cases.
+// APIs that generate them expect users to implement some control flow around them.
+// In those cases we need to pass them 'un-wrapped'.
+// Implementing this as a partial function also gives an opportunity to 'map' them
+// to some other type of exception if needed.
 , passThroughExceptionHandler: PartialFunction[Throwable, Throwable]
 
-
 // Allows us to retry calls when we bump into errors, but see passThroughExceptionHandler.
-, addNumRetries:               (=> Future[Throwable \/ A]) => Future[Throwable \/ A]
-
+, addNumRetries:               (=> Future[Try[A]]) => Future[Try[A]]
 
 // Allows us to log service call times, to debug site problems.
 // All of this async stuff is notorious for not having comprehensible stack traces.
-, addTraceCalls:               (=> Future[Throwable \/ A]) => Future[Throwable \/ A]
+, addTraceCalls:               (=> Future[Try[A]]) => Future[Try[A]]
 
 // Puts a timeout on call Future.
-, addSingleCallTimeout:        (=> Future[Throwable \/ A]) => Future[Throwable \/ A]
+, addSingleCallTimeout:        (=> Future[Try[A]]) => Future[Try[A]]
 
 ) {
 
   /** Composes all the Future transformations, gives resulting Future back.
-    * Applies timeout to a service call, this
+    * This is the only 'run' function here, so, effectively we insist on timeouts for all futures.
     *
-    * By default NonFatal RPC failures are caught and represented as an Either type R (either Throwable or A).
+    * By default NonFatal RPC failures are caught and represented as a Try[A].
     * OTOH if a serviceErrorDefaultValue is provided than we log errors and default to that, result type remains A.
     *
     * @param after mandatory timeout we set on 'service call' Futures
@@ -77,9 +75,8 @@ case class FutureBuilder[A,R] private (
     *                this may be called multiple times if retry() is enabled.
     *
     * @return Future[SomeServiceCallResult] if a default value is provided or
-    *         Future[Throwable \/ SomeServiceCallResult] in case there's no default,
-    *         indicating a failure branch that needs to be handled.
-    *         Scalaz's Either type (\/) is used instead of built-in because it composes better.
+    *         Future[Try[SomeServiceCallResult]] in case there's no default,
+    *         a 'checked exception' of sorts.
     */
   def runWithTimeout( after: FiniteDuration
                    )( rpcCall: => Future[A]
@@ -104,12 +101,12 @@ case class FutureBuilder[A,R] private (
         // Un-expected exceptions
         case NonFatal(e) =>
           blocking{ FutureBuilder.Logger.error(s"${rpcCallName}(${additionalMessage}): ${e.getMessage}", e) }
-          \/-(v) // we have a default value to fill in in case of generic server errors
+          Success(v) // we have a default value to fill in in case of generic server errors
 
       } map {
 
-        case -\/(e) => throw e // 'pass through' exception, need to re-throw
-        case \/-(v) => v // normal service call result
+        case Failure(e) => throw e // 'pass through' exception, need to re-throw
+        case Success(v) => v // normal service call result
       }
     })
   }
@@ -127,8 +124,6 @@ case class FutureBuilder[A,R] private (
     *
     * When we get one of these we don't want to retry() service calls, we don't want to wrap them with additional
     * user message, we just want to pass them through.
-    *
-    * An example would be subclasses of UserException in commons.
     */
   def withPassThroughExceptions( handlePassThroughExceptions: PartialFunction[Throwable, Throwable]
                                ): FutureBuilder[A, R] = {
@@ -136,9 +131,8 @@ case class FutureBuilder[A,R] private (
   }
 
 
-  /** Disable/enable RPC call tracing (simply logging call times for now).
-    * The intention is to try to integrate these with CloudWatch logs and get some idea about
-    * RPC call timing.
+  /** Enables RPC call tracing via provided callback function.
+    * E.g. you can log call times or send metrics somewhere.
     *
     * @param callTracer will be called with the results of an RPC call.
     */
@@ -152,13 +146,13 @@ case class FutureBuilder[A,R] private (
 
       val fRef = f // grab result of a 'by name' function call, onComplete is Unit type, this avoids firing call twice
 
-      fRef onComplete { res: Try[Throwable \/ A] =>
+      fRef onComplete { res: Try[Try[A]] =>
         val endTime = System.currentTimeMillis
         val dt = endTime - beginTime
 
         val trace = res match {
-          case Success(\/-(_)) => FutureTrace(rpcCallName, additionalMessage, dt, None)
-          case Success(-\/(e)) => FutureTrace(rpcCallName, additionalMessage, dt, Some(FutureRecoverableErrorTrace(e)))
+          case Success(Success(_)) => FutureTrace(rpcCallName, additionalMessage, dt, None)
+          case Success(Failure(e)) => FutureTrace(rpcCallName, additionalMessage, dt, Some(FutureRecoverableErrorTrace(e)))
           case Failure(e)      => FutureTrace(rpcCallName, additionalMessage, dt, Some(FutureGenericErrorTrace(e)))
         }
 
@@ -196,8 +190,8 @@ case class FutureBuilder[A,R] private (
 
   /** Adds more context to thrown exceptions. */
   private[this]
-  def addErrorMessage(f: => Future[Throwable \/ A]
-                     ): Future[Throwable \/ A] = {
+  def addErrorMessage(f: => Future[Try[A]]
+                     ): Future[Try[A]] = {
     implicit val ec = SameThreadExecutionContext
 
     f transform (
@@ -209,7 +203,7 @@ case class FutureBuilder[A,R] private (
 
   private[this]
   def callService( rpcCall: => Future[A]
-                 ): Future[Throwable \/ A] = {
+                 ): Future[Try[A]] = {
 
     val PassThroughExceptionExtractor = PartialFunctionToExceptionExtractor(passThroughExceptionHandler)
 
@@ -219,15 +213,15 @@ case class FutureBuilder[A,R] private (
     // Recover from pass-through exceptions here.
     //
     // There are 3 cases:
-    // - no errors -> { right result }
-    // - exception that we need to pass through -> { left exception }
+    // - no errors -> Success(result)
+    // - exception that we need to pass through -> Failure(exception)
     // - generic errors -> leave alone, let them bubble up to retry logic and be wrapped with additional user message
     //
-    // In other words, return values and exceptions that are 'data' get converted to result of the future, via Either,
+    // In other words, return values and exceptions that are 'data' get converted to result of the future, via Try,
     // so, both cases are treated as 'data' and produce 'a value'
     //
-    rpcCall.map(\/-(_))(stec) recover {
-      case PassThroughExceptionExtractor(e) => -\/(e)
+    rpcCall.map(Success(_))(stec) recover {
+      case PassThroughExceptionExtractor(e) => Failure(e)
     }
   }
 }
@@ -242,9 +236,9 @@ object FutureBuilder {
     */
   def apply[A]( rpcCallName: String
               , additionalMessage: String = ""
-              ): FutureBuilder[A, Throwable \/ A] = {
+              ): FutureBuilder[A, Try[A]] = {
 
-    new FutureBuilder[A, Throwable \/ A](
+    new FutureBuilder[A, Try[A]](
       rpcCallName                 = rpcCallName
     , additionalMessage           = additionalMessage
     , rpcErrorHandler             = defaultRPCErrorHandler[A] _
@@ -260,23 +254,23 @@ object FutureBuilder {
   val Logger = new AnyRef with OpenLoggable
 
   private // there's a subtle difference here from built-in 'identity' function in that this is a 'by-name' call
-  def byNameId[A](f: => Future[Throwable \/ A]
-                 ): Future[Throwable \/ A] = {
+  def byNameId[A](f: => Future[Try[A]]
+                 ): Future[Try[A]] = {
     f
   }
 
 
   private
-  def defaultRPCErrorHandler[A](f: => Future[Throwable \/ A]
-                               ): Future[Throwable \/ A] = {
+  def defaultRPCErrorHandler[A](f: => Future[Try[A]]
+                               ): Future[Try[A]] = {
 
     implicit val ec = com.gilt.gfc.concurrent.SameThreadExecutionContext
 
     // 'pass through' exceptions are already captured as a value here,
     // catch the rest and turn everything into a value (except for fatal exceptions)
 
-    f recover { // successful results are 'right'
-      case NonFatal(e) => -\/(e) // non-fatal exceptions are 'left', fatal should bubble up
+    f recover {
+      case NonFatal(e) => Failure(e)
     }
   }
 
