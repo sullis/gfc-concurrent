@@ -138,8 +138,9 @@ object ScalaFutures {
    * and by a given factor until it reaches a given maximum delay value. If maxRetryTimeout is reached, the last
    * Future is scheduled at the point of the timeout. E.g. if the initial delay is 1 second, the retry timeout 10 seconds
    * and all other parameters at their default, the future will be retried after 1, 3 (=1+2), 7 (=1+2+4) and 10 seconds before it fails.
-   * Optionally jitter can be enabled to randomize of the delay interval. For more background on the subject see
+   * The actual delay between iterations is subject to jitter randomization. For more background on the subject of jitter see
    * http://www.awsarchitectureblog.com/2015/03/backoff.html
+   * Optionally, jitter can be disabled, in which case the delay interval follows the strict exponential propagation as outlined above.
    *
    * @param maxRetryTimes The maximum number of retries, defaults to Long.MaxValue. The future f is triggered at most maxRetryTimes + 1 times.
    *                      In other words, iff maxRetryTimes == 0, f will be called exactly once, iff maxRetryTimes == 1, it will be called at
@@ -148,7 +149,7 @@ object ScalaFutures {
    * @param initialDelay The initial delay value, defaults to 1 nanosecond
    * @param maxDelay The maximum delay value, defaults to 1 day
    * @param exponentFactor The factor by which the delay increases between retry iterations
-   * @param jitter Enable jitter to randomize the delay, defaults to false.
+   * @param jitter Enable jitter to randomize the delay, defaults to true.
    * @param f A function that returns a new Future
    * @param ec The ExecutionContext on which to retry the Future if it failed.
    * @param log An optional log function to report failed iterations to. By default prints the thrown Exception to the console.
