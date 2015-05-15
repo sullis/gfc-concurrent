@@ -9,15 +9,13 @@ crossScalaVersions := Seq("2.11.6", "2.10.5")
 libraryDependencies ++= Seq(
   "com.gilt" %% "gfc-logging" % "0.0.2",
   "com.gilt" %% "gfc-time" % "0.0.4" % "test",
-  "org.scalatest" %% "scalatest" % "2.2.4" % "test",
+  "org.scalatest" %% "scalatest" % "2.2.5" % "test",
   "org.mockito" % "mockito-core" % "1.10.19" % "test"
 )
 
-releaseSettings
+releaseCrossBuild := true
 
-ReleaseKeys.crossBuild := true
-
-ReleaseKeys.publishArtifactsAction := PgpKeys.publishSigned.value
+releasePublishArtifactsAction := PgpKeys.publishSigned.value
 
 publishMavenStyle := true
 
