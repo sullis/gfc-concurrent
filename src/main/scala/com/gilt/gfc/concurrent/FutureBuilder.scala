@@ -43,7 +43,7 @@ case class FutureBuilder[A,R] private (
 // OTOH, when we don't have any defaults - we want to bubble that decision
 // up to a typesystem level. Scala doesn't have checked exceptions but
 // we can express a mandatory check with a Try[A] type.
-, errorHandler:             (=> Future[Try[A]]) => Future[R]
+, errorHandler: (=> Future[Try[A]]) => Future[R]
 
 // As it happens some of the exceptions are actually data,
 // APIs that generate them expect users to implement some control flow around them.
@@ -53,14 +53,14 @@ case class FutureBuilder[A,R] private (
 , passThroughExceptionHandler: PartialFunction[Throwable, Throwable]
 
 // Allows us to retry calls when we bump into errors, but see passThroughExceptionHandler.
-, addNumRetries:               (=> Future[Try[A]]) => Future[Try[A]]
+, addNumRetries: (=> Future[Try[A]]) => Future[Try[A]]
 
 // Allows us to log service call times, to debug site problems.
 // All of this async stuff is notorious for not having comprehensible stack traces.
-, addTraceCalls:               (=> Future[Try[A]]) => Future[Try[A]]
+, addTraceCalls: (=> Future[Try[A]]) => Future[Try[A]]
 
 // Puts a timeout on call Future.
-, addSingleCallTimeout:        (=> Future[Try[A]]) => Future[Try[A]]
+, addSingleCallTimeout: (=> Future[Try[A]]) => Future[Try[A]]
 
 ) {
 
@@ -71,22 +71,22 @@ case class FutureBuilder[A,R] private (
     * OTOH if a serviceErrorDefaultValue is provided than we log errors and default to that, result type remains A.
     *
     * @param after mandatory timeout we set on 'service call' Futures
-    * @param rpcCall 'by name' parameter that evaluates to a Future[SomeServiceCallResult],
-    *                this may be called multiple times if retry() is enabled.
+    * @param call 'by name' parameter that evaluates to a Future[SomeServiceCallResult],
+    *             this may be called multiple times if retry() is enabled.
     *
     * @return Future[SomeServiceCallResult] if a default value is provided or
     *         Future[Try[SomeServiceCallResult]] in case there's no default,
     *         a 'checked exception' of sorts.
     */
   def runWithTimeout( after: FiniteDuration
-                   )( rpcCall: => Future[A]
+                   )( call: => Future[A]
                     ): Future[R] = {
     import ScalaFutures._
 
     this.copy[A,R](addSingleCallTimeout = { f =>
       implicit val executor: ExecutionContext = ExecutionContext.Implicits.global
       f.withTimeout(after)
-    }).run(rpcCall)
+    }).run(call)
   }
 
   /** Will return this value if a call fails or we fail to interpret results. */
@@ -173,7 +173,7 @@ case class FutureBuilder[A,R] private (
 
   /** We hide this method to force runWithTimeout() instead, this way timeouts are always applied. */
   private
-  def run( rpcCall: => Future[A]
+  def run( call: => Future[A]
          ): Future[R] = {
 
     // order matters, e.g. we want to apply single call timeout before any retries
@@ -182,7 +182,7 @@ case class FutureBuilder[A,R] private (
         addTraceCalls(
           addSingleCallTimeout(
             addErrorMessage(
-              callService(rpcCall
+              callService(call
     ))))))
   }
 
@@ -202,7 +202,7 @@ case class FutureBuilder[A,R] private (
 
 
   private[this]
-  def callService( rpcCall: => Future[A]
+  def callService( call: => Future[A]
                  ): Future[Try[A]] = {
 
     val PassThroughExceptionExtractor = PartialFunctionToExceptionExtractor(passThroughExceptionHandler)
@@ -220,7 +220,7 @@ case class FutureBuilder[A,R] private (
     // In other words, return values and exceptions that are 'data' get converted to result of the future, via Try,
     // so, both cases are treated as 'data' and produce 'a value'
     //
-    rpcCall.map(Success(_))(stec) recover {
+    call.map(Success(_))(stec) recover {
       case PassThroughExceptionExtractor(e) => Failure(e)
     }
   }

@@ -3,18 +3,18 @@ package com.gilt.gfc.concurrent.trace
 import com.gilt.gfc.logging.OpenLoggable
 
 
-/** A trace of a single Future-based RPC call.
+/** A trace of a single Future-based call.
   * @see  {{{FutureBuilder}}}
   */
 case class FutureTrace (
-  rpcCallName: String
+  callName: String
 , additionalMessage: String
 , durationMillis: Long
 , error: Option[FutureErrorTrace]
 )
 
 
-/** A 'union' type of Future-based RPC call errors we differentiate. */
+/** A 'union' type of Future-based call errors we differentiate. */
 sealed trait FutureErrorTrace
 case class FutureRecoverableErrorTrace(throwable: Throwable) extends FutureErrorTrace
 case class FutureGenericErrorTrace(throwable: Throwable) extends FutureErrorTrace
