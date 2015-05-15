@@ -246,7 +246,8 @@ class ScalaFuturesTest extends FunSuite with Matchers {
     // Delay series should be (ms): 100, 150, 225, 337, 500, 500
     val future = ScalaFutures.retryWithExponentialDelay(initialDelay = 100 millis,
                                                         maxDelay = 500 millis,
-                                                        exponentFactor = 1.5)(nextFuture)
+                                                        exponentFactor = 1.5,
+                                                        jitter = false)(nextFuture)
 
     await(future) shouldBe "ok"
 
