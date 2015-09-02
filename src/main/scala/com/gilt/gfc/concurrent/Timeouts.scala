@@ -27,11 +27,12 @@ object Timeouts {
   private def scheduleTimeout[T](after: FiniteDuration): Future[T] = {
     val timingOut = Promise()
     val now = System.currentTimeMillis()
+    val origin = new TimeoutException()
 
     scheduledExecutor.schedule(new Runnable() {
       override def run() {
         val elapsed = System.currentTimeMillis() - now
-        timingOut.tryFailure(new TimeoutException(s"""Timeout after ${after} (real: ${elapsed} ms.)"""))
+        timingOut.tryFailure(new TimeoutException(s"""Timeout after ${after} (real: ${elapsed} ms.)""").initCause(origin))
       }
     }, after.toMillis, TimeUnit.MILLISECONDS)
 
