@@ -1,7 +1,7 @@
 package com.gilt.gfc.concurrent
 
 import java.util.concurrent.{ TimeoutException, TimeUnit }
-import scala.concurrent.duration.{ Duration, FiniteDuration }
+import scala.concurrent.duration._
 import scala.concurrent.{ Future, Await }
 import org.scalatest.{WordSpec, Matchers}
 
@@ -42,6 +42,17 @@ class TimeoutsSpec extends WordSpec with Matchers {
         }
 
         timedOuts.filter { case (timedOut, after, real, delta) => delta.toMillis > MaxDelta }.size === 0
+      }
+
+      "include the origin of the future" in {
+        val here = new Exception()
+        val timingOut = Timeouts.timeout(1 millis)
+        val thrown = the [TimeoutException] thrownBy { Await.result(timingOut, Duration(10, "seconds")) }
+        thrown.getCause should not be null
+        thrown.getStackTrace.size shouldBe <= (9)
+        thrown.getCause.getStackTrace.size shouldBe > (50)
+        thrown.getCause.getStackTrace.drop(3) shouldBe here.getStackTrace.drop(1)
+
       }
     }
   }
