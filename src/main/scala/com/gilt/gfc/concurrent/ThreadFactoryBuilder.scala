@@ -42,7 +42,7 @@ case class ThreadFactoryBuilder private (private val nameFormat: Option[String],
   def build(): ThreadFactory = {
     val nameF: Option[() => String] = nameFormat.map { nf =>
       val count = new AtomicLong(0)
-      () => nf.format(count.getAndDecrement)
+      () => nf.format(count.getAndIncrement)
     }
 
     new ThreadFactory {
