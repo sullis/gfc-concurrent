@@ -20,7 +20,7 @@ class TimeoutsSpec extends WordSpec with Matchers {
         elapsed should be >= after.toMillis
       }
 
-      "create timinig out Futures that will fail predictably even under load" in {
+      "create timing out Futures that will fail predictably even under load" in {
         import scala.util.Random._
 
         val MaxTimeout = Duration(10, "seconds").toMillis.toInt
@@ -36,7 +36,7 @@ class TimeoutsSpec extends WordSpec with Matchers {
         val timedOuts: List[(Future[Nothing], Duration, Duration, Duration)] = timingOuts.map { case (timingOut, after) =>
           val thrown = the [TimeoutException] thrownBy { Await.result(timingOut, Duration.Inf) }
           // println(thrown)
-          val real = Duration(extractReal(thrown.getMessage), TimeUnit.MILLISECONDS)
+          val real = Duration(extractReal(thrown.getCause.getMessage), TimeUnit.MILLISECONDS)
           val delta = Duration(real.toMillis - after.toMillis, TimeUnit.MILLISECONDS)
           (timingOut, after, real, delta)
         }
@@ -48,10 +48,10 @@ class TimeoutsSpec extends WordSpec with Matchers {
         val here = new Exception()
         val timingOut = Timeouts.timeout(1 millis)
         val thrown = the [TimeoutException] thrownBy { Await.result(timingOut, Duration(10, "seconds")) }
+        thrown.getStackTrace.size shouldBe > (50)
+        thrown.getStackTrace.drop(7) shouldBe here.getStackTrace.drop(1)
         thrown.getCause should not be null
-        thrown.getStackTrace.size shouldBe <= (9)
-        thrown.getCause.getStackTrace.size shouldBe > (50)
-        thrown.getCause.getStackTrace.drop(3) shouldBe here.getStackTrace.drop(1)
+        thrown.getCause.getStackTrace.size shouldBe <= (9)
 
       }
     }
