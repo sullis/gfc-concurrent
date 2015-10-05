@@ -32,9 +32,9 @@ class FutureBuilderSpec
   it should "not blow up when tracing timed out futures" in {
     (AwaitResult(10 seconds) {
       FutureBuilder[String]("test").withTraceCalls(LogFutureTraces(_)).runWithTimeout(10 seconds) {
-        timeout(100 milliseconds)
+        timeout(100 milliseconds, Some("Test timed out"))
       }
-    }).failed.get.getMessage should startWith("test(): Timeout after")
+    }).failed.get.getMessage should startWith("test(): Test timed out")
   }
 
 

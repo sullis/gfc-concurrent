@@ -20,8 +20,15 @@ object ScalaFutures {
     /**
      * Create a new Future that times out with a [[java.util.concurrent.TimeoutException]] after the given FiniteDuration
      */
-    def withTimeout(after: FiniteDuration)(implicit ec: ExecutionContext): Future[A] =
-      Future.firstCompletedOf(Seq(f, Timeouts.timeout(after)))
+    @deprecated("Use withTimeout(FiniteDuration, Option[String]) instead", "0.2.0")
+    def withTimeout(after: FiniteDuration)(implicit ec: ExecutionContext): Future[A] = withTimeout(after, None)
+
+    /**
+     * Create a new Future that times out with a [[java.util.concurrent.TimeoutException]] after the given FiniteDuration.
+     * If errorMessage is provided it is used when building the TimeoutException.
+     */
+    def withTimeout(after: FiniteDuration, errorMessage: Option[String])(implicit ec: ExecutionContext): Future[A] =
+      Future.firstCompletedOf(Seq(f, Timeouts.timeout(after, errorMessage)))
   }
 
   implicit class AsFuture[A](val a: A) extends AnyVal {
