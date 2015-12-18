@@ -85,7 +85,7 @@ case class FutureBuilder[A,R] private (
 
     this.copy[A,R](addSingleCallTimeout = { f =>
       implicit val executor: ExecutionContext = ExecutionContext.Implicits.global
-      f.withTimeout(after, Some(s"Timed out while: $callName"))
+      f.withTimeout(after, Some(s"Timed out in: $callName ($additionalMessage)"))
     }).run(call)
   }
 
