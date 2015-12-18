@@ -78,7 +78,6 @@ case class FutureBuilder[A,R] private (
     *         Future[Try[SomeServiceCallResult]] in case there's no default,
     *         a 'checked exception' of sorts.
     */
-  @deprecated("Use runWithTimeout(FiniteDuration, Option[String]) instead", "0.2.0")
   def runWithTimeout( after: FiniteDuration
                       )( call: => Future[A]
                       ): Future[R] = {
@@ -86,33 +85,7 @@ case class FutureBuilder[A,R] private (
 
     this.copy[A,R](addSingleCallTimeout = { f =>
       implicit val executor: ExecutionContext = ExecutionContext.Implicits.global
-      f.withTimeout(after, None)
-    }).run(call)
-  }
-
-  /** Composes all the Future transformations, gives resulting Future back.
-    * This is the only 'run' function here, so, effectively we insist on timeouts for all futures.
-    *
-    * By default NonFatal failures are caught and represented as a Try[A].
-    * OTOH if a serviceErrorDefaultValue is provided than we log errors and default to that, result type remains A.
-    *
-    * @param after mandatory timeout we set on 'service call' Futures
-    * @param errorMessage Error message that will be used to construct any resultant TimeoutException
-    * @param call 'by name' parameter that evaluates to a Future[SomeServiceCallResult],
-    *             this may be called multiple times if retry() is enabled.
-    *
-    * @return Future[SomeServiceCallResult] if a default value is provided or
-    *         Future[Try[SomeServiceCallResult]] in case there's no default,
-    *         a 'checked exception' of sorts.
-    */
-  def runWithTimeout( after: FiniteDuration, errorMessage: Option[String]
-                   )( call: => Future[A]
-                    ): Future[R] = {
-    import ScalaFutures._
-
-    this.copy[A,R](addSingleCallTimeout = { f =>
-      implicit val executor: ExecutionContext = ExecutionContext.Implicits.global
-      f.withTimeout(after, errorMessage)
+      f.withTimeout(after, Some(s"Timed out while: $callName"))
     }).run(call)
   }
 
