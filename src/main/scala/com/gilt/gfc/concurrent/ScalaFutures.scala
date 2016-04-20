@@ -1,13 +1,13 @@
 package com.gilt.gfc.concurrent
 
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
-
+import java.util.concurrent.atomic.{AtomicReference, AtomicInteger}
 import scala.annotation.tailrec
+import scala.collection.generic.CanBuildFrom
 import scala.concurrent.duration._
-import scala.concurrent.{Promise, ExecutionContext, Future}
+import scala.concurrent.{Future, ExecutionContext, Promise}
 import scala.util.control.NonFatal
-import scala.util.{Random, Failure, Success, Try}
+import scala.util.{Random, Success, Failure, Try}
 
 /**
  * Little helpers for scala futures
@@ -115,6 +115,16 @@ object ScalaFutures {
       promise.future
     }
   }
+
+  /**
+    *Version of [[scala.concurrent.Future.traverse]], that performs a sequential rather than a parallel map
+    */
+  def traverseSequential[A, B, M[X] <: TraversableOnce[X]](in: M[A])(fn: A => Future[B])(implicit cbf: CanBuildFrom[M[A], B, M[B]], executor: ExecutionContext): Future[M[B]] =
+    in.foldLeft(Future.successful(cbf(in))) { (fr, a) =>
+      for { r <- fr
+            b <- fn(a)
+      } yield (r += b)
+    }.map(_.result())
 
   /**
    * Retries a Future until it succeeds or a maximum number of retries has been reached.
