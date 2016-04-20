@@ -2,11 +2,11 @@ package com.gilt.gfc.concurrent
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicBoolean}
 import scala.collection.immutable.VectorBuilder
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success, Try}
-import org.scalatest.FunSuite
-import org.scalatest.Matchers
+import org.scalatest.{Matchers, FunSuite}
 
 class ScalaFuturesTest extends FunSuite with Matchers {
   implicit def logSuppressor(t: Throwable): Unit = {}
@@ -144,6 +144,37 @@ class ScalaFuturesTest extends FunSuite with Matchers {
     thrown.getMessage should be("boom")
     System.currentTimeMillis() should be >=(now + 400)
     System.currentTimeMillis() should be <(now + 600)
+  }
+
+  test("traverseSequential kicks off futures sequentially") {
+    import scala.concurrent.ExecutionContext.Implicits.global
+
+    val counter = new AtomicInteger()
+
+    def func(i: Int): Future[Int] = Future {
+      counter.getAndIncrement() shouldBe 0
+      Thread.sleep(100)
+      counter.getAndDecrement() shouldBe 1
+      i
+    }
+
+    await(ScalaFutures.traverseSequential(1 to 10)(func)) shouldBe (1 to 10)
+  }
+
+  test("traverseSequential fails fast") {
+    import scala.concurrent.ExecutionContext.Implicits.global
+
+    val buf = new ListBuffer[Int]()
+
+    def func(i: Int): Future[Int] = Future {
+      buf += i
+      if (i == 5) throw new RuntimeException("boo to 5's!")
+      i
+    }
+
+    val thrown = the [RuntimeException] thrownBy { await(ScalaFutures.traverseSequential(1 to 10)(func)) }
+    thrown.getMessage should be("boo to 5's!")
+    buf.result() should be (1 to 5)
   }
 
   test("Same thread execution context") {
