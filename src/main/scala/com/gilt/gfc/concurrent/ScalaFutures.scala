@@ -139,7 +139,7 @@ object ScalaFutures {
   def retry[T](maxRetryTimes: Long = Long.MaxValue)
               (f: => Future[T])
               (implicit ec: ExecutionContext,
-                        log: Throwable => Unit = _.printStackTrace): Future[T] = {
+                        log: Throwable => Unit = Implicits.NoLog): Future[T] = {
     safely(f).recoverWith {
       case NonFatal(e) if maxRetryTimes > 0 =>
         log(e)
@@ -179,7 +179,7 @@ object ScalaFutures {
                                    jitter: Boolean = true)
                                   (f: => Future[T])
                                   (implicit ec: ExecutionContext,
-                                   log: Throwable => Unit = _.printStackTrace): Future[T] = {
+                                   log: Throwable => Unit = Implicits.NoLog): Future[T] = {
     require(exponentFactor >= 1)
     safely(f).recoverWith {
       case NonFatal(e) if (maxRetryTimes > 0 && !maxRetryTimeout.isOverdue()) =>
@@ -212,5 +212,7 @@ object ScalaFutures {
 
   object Implicits {
     implicit val sameThreadExecutionContext = SameThreadExecutionContext
+    implicit val NoLog: Throwable => Unit = _ => {}
+    implicit val ConsoleLog: Throwable => Unit = _.printStackTrace
   }
 }
