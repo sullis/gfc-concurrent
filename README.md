@@ -9,20 +9,20 @@ A library that contains scala concurrency helper code. Part of the gilt foundati
 This object contains a bunch of sugar and little helpers that make working with scala futures a bit easier:
 
 * Limit how long a scala Future can take by giving it a timeout Duration, after which it fails with a `java.util.concurrent.TimeoutException`
-```
+```scala
     import scala.concurrent.duration._
     import com.gilt.gfc.concurrent.ScalaFutures._
     val futureWithTimeout = myFuture.withTimeout(1 minute)
 ```
 * Retry a Future until it succeeds, with or without delay:
-```
+```scala
     import scala.concurrent.duration._
     import com.gilt.gfc.concurrent.ScalaFutures._
     def remoteCall: Future[Response] = ???
     // Retry the remote call up to 10 times until it succeeds
     val response: Future[Response] = retry(10)(remoteCall)
 ```
-```
+```scala
     import scala.concurrent.duration._
     import com.gilt.gfc.concurrent.ScalaFutures._
     def remoteCall: Future[Response] = ???
@@ -38,35 +38,35 @@ This object contains a bunch of sugar and little helpers that make working with 
      }
 ```
 * Higher-order functions missing in the scala.concurrent.Future object:
-```
+```scala
     // Asynchronously tests whether a predicate holds for some of the elements of a collection of futures
     val futures: Seq[Future[String]] = ???
     ScalaFutures.exists(futures, _.contains("x"))
 ```
-```
+```scala
     // Asynchronously tests whether a predicate holds for all elements of a collection of futures
     val futures: Seq[Future[String]] = ???
     ScalaFutures.forall(futures, _.contains("x"))
 ```
 * Sequential traverse that evaluates the Future function lazily and thus initiates them sequentially (one after the other) rather than in parallel as is the case with Future.traverse:
-```
+```scala
   def fetchPage(pageNo: Int): Future[Page] = ???
   val pageNumbers: Seq[Int] = 1 to 10
   val pages: Future[Seq[Page]] = ScalaFutures.traverseSequential(pageNumbers)(pageNo => fetchPage(pageNo))
 ```
 * Enhanced fold that fails fast, as soon as a Future in the input collection fails. The "normal" scala.concurrent.Future.fold() will always take as long as the longest running Future, even if another Future has already failed. This implementation of fold will shortcut if any of the futures in the input collection fails:
-```
+```scala
     val futures: Seq[Future[String]] = ???
     val totalLength: Future[Int] = ScalaFutures.foldFast(futures)(0)((sum, str) => sum + str.length)
 ```
 * Convert a `scala.util.Try` into a Future. If the Try is a Success, the Future is successful, if the Try is a Failure,
 the Future is a failed Future with the same Exception.
-```
+```scala
     val someTry: Try[String] = Try(???)
     val someFuture: Future[String] = ScalaFutures.fromTry(someTry)
 ```
 * Future of an empty `Option`
-```
+```scala
     val noString: Future[Option[String]] = ScalaFuture.FutureNone
 ```
 
@@ -75,7 +75,7 @@ the Future is a failed Future with the same Exception.
 `ExecutionContext` that executes an asynchronous action synchronously on the same `Thread`. This can be
 useful for small code blocks that don't need to be run on a separate thread.
 The object can either be used explicitly or imported implicitly like this:
-```
+```scala
     import com.gilt.gfc.concurrent.ScalaFutures.Implicits._
     someFuture.map(_ + 1)
 ```
@@ -91,7 +91,7 @@ These are scala adaptations and enhancements of `java.util.concurrent.ExecutorSe
 Besides offering functions to execute and schedule the execution of scala functions, the `AsyncScheduledExecutorService`
 allows scheduling of asynchronous tasks, represented by a scala `Future`, that are scheduled with the same guarantees
 as the (synchronous) scheduling functions. I.e. they are guaranteed to not execute concurrently. Example:
-```
+```scala
     // Have a AsyncScheduledExecutorService
     val scalaExecutor: AsyncScheduledExecutorService = ???
 
@@ -106,7 +106,7 @@ as the (synchronous) scheduling functions. I.e. they are guaranteed to not execu
 ### com.gilt.gfc.concurrent.JavaConverters / JavaConversions
 
 Implicit and explicit functions to convert java.util.concurrent.(Scheduled)ExecutorService instances to the above enhanced types.
-```
+```scala
     // Have a new ScheduledExecutorService
     val javaExecutor: ScheduledExecutorService = ???
     
@@ -123,7 +123,7 @@ Implicit and explicit functions to convert java.util.concurrent.(Scheduled)Execu
 Factories that allow the creation of a set of threads with a common name, group, daemon and other properties.
 This is e.g. useful to identify background threads and make sure they do not prevent the jvm from shutting down
 or for debugging/logging purposes to identify clearly what are the active threads.
-```
+```scala
     // Create a new ThreadGroup (all "with" functions are optional)
     val threadGroup = ThreadGroupBuilder().
                         withName("foo").
