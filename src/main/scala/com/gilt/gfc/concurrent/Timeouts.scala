@@ -1,6 +1,6 @@
 package com.gilt.gfc.concurrent
 
-import java.util.concurrent.{TimeUnit, TimeoutException, Executors}
+import java.util.concurrent.{TimeoutException, Executors}
 
 import scala.concurrent.{Promise, Future}
 import scala.concurrent.duration.FiniteDuration
@@ -12,7 +12,8 @@ import scala.concurrent.duration.FiniteDuration
  * @since 22-Nov-2014
  */
 object Timeouts {
-  private[concurrent] val scheduledExecutor = Executors.newSingleThreadScheduledExecutor()
+  import JavaConverters._
+  private[concurrent] val scheduledExecutor = Executors.newSingleThreadScheduledExecutor().asScala
 
   /**
    * Returns a timing out Future.
@@ -39,12 +40,10 @@ object Timeouts {
     val now = System.currentTimeMillis()
     val origin = errorMessage.fold(new TimeoutException())(new TimeoutException(_))
 
-    scheduledExecutor.schedule(new Runnable() {
-      override def run() {
-        val elapsed = System.currentTimeMillis() - now
-        timingOut.tryFailure(origin.initCause(new TimeoutException(s"""Timeout after ${after} (real: ${elapsed} ms.)""")))
-      }
-    }, after.toMillis, TimeUnit.MILLISECONDS)
+    scheduledExecutor.schedule(after) {
+      val elapsed = System.currentTimeMillis() - now
+      timingOut.tryFailure(origin.initCause(new TimeoutException(s"""Timeout after ${after} (real: ${elapsed} ms.)""")))
+    }
 
     timingOut.future
   }

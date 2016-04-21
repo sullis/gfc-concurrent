@@ -51,7 +51,7 @@ class TimeoutsSpec extends WordSpec with Matchers {
         thrown.getStackTrace.size shouldBe > (50)
         thrown.getStackTrace.drop(7) shouldBe here.getStackTrace.drop(1)
         thrown.getCause should not be null
-        thrown.getCause.getStackTrace.size shouldBe <= (9)
+        thrown.getCause.getStackTrace.size shouldBe <= (10)
 
       }
     }
