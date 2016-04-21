@@ -20,7 +20,6 @@ object ScalaFutures {
     /**
      * Create a new Future that times out with a [[java.util.concurrent.TimeoutException]] after the given FiniteDuration
      */
-    @deprecated("Use withTimeout(FiniteDuration, Option[String]) instead", "0.2.0")
     def withTimeout(after: FiniteDuration)(implicit ec: ExecutionContext): Future[A] = withTimeout(after, None)
 
     /**

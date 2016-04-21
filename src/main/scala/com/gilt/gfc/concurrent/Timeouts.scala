@@ -21,7 +21,6 @@ object Timeouts {
    *
    * @param after a FiniteDuration instance with the ttl of this Future.
    */
-  @deprecated("Use timeout(FiniteDuration, Option[String]) instead", "0.2.0")
   def timeout[T](after: FiniteDuration): Future[T] = timeout(after, None)
 
   /**
