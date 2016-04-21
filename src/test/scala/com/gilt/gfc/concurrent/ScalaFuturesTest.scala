@@ -249,10 +249,10 @@ class ScalaFuturesTest extends FunSuite with Matchers {
     }
 
     val start = System.currentTimeMillis()
-    val thrown = the [Exception] thrownBy { await(ScalaFutures.retryWithExponentialDelay(maxRetryTimeout = 100 millis fromNow, jitter = false)(function)) }
+    val thrown = the [Exception] thrownBy { await(ScalaFutures.retryWithExponentialDelay(maxRetryTimeout = 1000 millis fromNow, initialDelay = 500 millis, maxDelay = 500 millis, jitter = false)(function)) }
     thrown.getMessage shouldBe "boom"
-    (System.currentTimeMillis() - start) should be (120L +- 20L)
-    count shouldBe (8 +- 1)
+    (System.currentTimeMillis() - start) should be (1000L +- 200L)
+    count shouldBe 3
   }
 
   test("retryWithExponentialDelay should apply exponential backoff") {

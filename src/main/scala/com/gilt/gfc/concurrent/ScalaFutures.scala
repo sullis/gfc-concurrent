@@ -184,7 +184,7 @@ object ScalaFutures {
                                    log: Throwable => Unit = Implicits.NoLog): Future[T] = {
     require(exponentFactor >= 1)
     safely(f).recoverWith {
-      case NonFatal(e) if (maxRetryTimes > 0 && !maxRetryTimeout.isOverdue()) =>
+      case NonFatal(e) if (maxRetryTimes > 0 && maxRetryTimeout.timeLeft.toMillis > 1) =>
         log(e)
         val p = Promise[T]
         val delayLimit = maxDelay.min(maxRetryTimeout.timeLeft)
