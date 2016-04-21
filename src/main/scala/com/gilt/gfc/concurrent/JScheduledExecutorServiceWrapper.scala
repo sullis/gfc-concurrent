@@ -1,8 +1,8 @@
 package com.gilt.gfc.concurrent
 
-import java.util.concurrent.{Delayed, Callable, ScheduledFuture, TimeUnit, ScheduledExecutorService => JScheduledExecutorService}
-import scala.concurrent.{ExecutionContext, Future}
-import scala.concurrent.duration.FiniteDuration
+import java.util.concurrent.{TimeUnit, ScheduledFuture, Delayed, Callable, ScheduledExecutorService => JScheduledExecutorService}
+import scala.concurrent.{Future, ExecutionContext}
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 /**
  * Wrapper of a java.util.concurrent.ScheduledExecutorService implementing the
@@ -16,16 +16,28 @@ trait JScheduledExecutorServiceWrapper extends JExecutorServiceWrapper with Asyn
   override def schedule[V](c: Callable[V], delay: Long, timeUnit: TimeUnit): ScheduledFuture[V] = executorService.schedule(c, delay, timeUnit)
   override def schedule(r: Runnable, delay: Long, timeUnit: TimeUnit): ScheduledFuture[_] = executorService.schedule(r, delay, timeUnit)
 
+  override def scheduleWithFixedDelay(initialDelay: FiniteDuration, delay: FiniteDuration)(f: => Unit): ScheduledFuture[_] = {
+    scheduleWithFixedDelay(initialDelay.toMillis, delay.toMillis, TimeUnit.MILLISECONDS)(f)
+  }
+
   override def scheduleWithFixedDelay(initialDelay: Long, delay: Long, timeUnit: TimeUnit)(f: => Unit): ScheduledFuture[_] = {
-    executorService.scheduleWithFixedDelay(asRunnable(f), initialDelay, delay, timeUnit)
+    scheduleWithFixedDelay(asRunnable(f), initialDelay, delay, timeUnit)
+  }
+
+  override def scheduleAtFixedRate(initialDelay: FiniteDuration, period: FiniteDuration)(f: => Unit): ScheduledFuture[_] = {
+    scheduleAtFixedRate(initialDelay.toMillis, period.toMillis, TimeUnit.MILLISECONDS)(f)
   }
 
   override def scheduleAtFixedRate(initialDelay: Long, period: Long, timeUnit: TimeUnit)(f: => Unit): ScheduledFuture[_] = {
-    executorService.scheduleAtFixedRate(asRunnable(f), initialDelay, period, timeUnit)
+    scheduleAtFixedRate(asRunnable(f), initialDelay, period, timeUnit)
+  }
+
+  override def schedule[V](delay: FiniteDuration)(f: => V): ScheduledFuture[V] = {
+    schedule(delay.toMillis, TimeUnit.MILLISECONDS)(f)
   }
 
   override def schedule[V](delay: Long, timeUnit: TimeUnit)(f: => V): ScheduledFuture[V] = {
-    executorService.schedule(asCallable(f), delay, timeUnit)
+    schedule(asCallable(f), delay, timeUnit)
   }
 
   override def asyncSchedule(initialDelay: FiniteDuration, delayUntilNext: FiniteDuration => FiniteDuration)
@@ -33,12 +45,9 @@ trait JScheduledExecutorServiceWrapper extends JExecutorServiceWrapper with Asyn
                             (implicit executor: ExecutionContext): ScheduledFuture[_] = {
     val wrapper: ScheduledFutureWrapper[Unit] = new ScheduledFutureWrapper()
     def doSchedule(delay: FiniteDuration): Unit = {
-      val delayMs = {
-        val ms = delay.toMillis
-        if (ms < 0) 0 else ms
-      }
       if (!wrapper.isCancelled) {
-        val future: ScheduledFuture[Unit] = schedule(delayMs, TimeUnit.MILLISECONDS) {
+        delay.max(Duration.Zero)
+        val future: ScheduledFuture[Unit] = schedule(delay.max(Duration.Zero)) {
           val start = System.currentTimeMillis()
           try {
             futureTask.onComplete { _ =>

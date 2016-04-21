@@ -16,6 +16,8 @@ import scala.util.{Random, Success, Failure, Try}
  * @since 11/Jul/2014 13:25
  */
 object ScalaFutures {
+  private val FiniteDurationMax = FiniteDuration(Long.MaxValue, TimeUnit.NANOSECONDS)
+
   implicit class FutureOps[A](val f: Future[A]) extends AnyVal {
     /**
      * Create a new Future that times out with a [[java.util.concurrent.TimeoutException]] after the given FiniteDuration
@@ -185,26 +187,28 @@ object ScalaFutures {
       case NonFatal(e) if (maxRetryTimes > 0 && !maxRetryTimeout.isOverdue()) =>
         log(e)
         val p = Promise[T]
-        val jitteredDelay: Duration = {
+        val delayLimit = maxDelay.min(maxRetryTimeout.timeLeft)
+        val jitteredDelay = {
           if (jitter) {
             initialDelay * Random.nextDouble
           } else {
             initialDelay
           }
         }
-        val delayLimit = Seq(maxDelay, maxRetryTimeout.timeLeft).min
-        Timeouts.scheduledExecutor.schedule(new Runnable() {
-          override def run() {
-            p.completeWith(retryWithExponentialDelay(maxRetryTimes - 1,
-                                                     maxRetryTimeout,
-                                                     Seq(initialDelay,  delayLimit).min * exponentFactor,
-                                                     maxDelay,
-                                                     exponentFactor,
-                                                     jitter)(
-                                                     f)
-            )
-          }
-        }, Seq(jitteredDelay, delayLimit).min.toNanos, TimeUnit.NANOSECONDS)
+        val delay: FiniteDuration = jitteredDelay.min(delayLimit) match {
+          case fd: FiniteDuration => fd
+          case _ => FiniteDurationMax
+        }
+        Timeouts.scheduledExecutor.schedule(delay) {
+          p.completeWith(retryWithExponentialDelay(maxRetryTimes - 1,
+                                                   maxRetryTimeout,
+                                                   initialDelay.min(delayLimit) * exponentFactor,
+                                                   maxDelay,
+                                                   exponentFactor,
+                                                   jitter)(
+                                                   f)
+          )
+        }
 
         p.future
     }
