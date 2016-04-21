@@ -2,12 +2,12 @@ name := "gfc-concurrent"
 
 organization := "com.gilt"
 
-scalaVersion := "2.11.7"
+scalaVersion := "2.11.8"
 
-crossScalaVersions := Seq("2.11.7", "2.10.5")
+crossScalaVersions := Seq("2.11.8", "2.10.5")
 
 libraryDependencies ++= Seq(
-  "com.gilt" %% "gfc-logging" % "0.0.3",
+  "com.gilt" %% "gfc-logging" % "0.0.4",
   "com.gilt" %% "gfc-time" % "0.0.5" % "test",
   "org.scalatest" %% "scalatest" % "2.2.5" % "test",
   "org.mockito" % "mockito-core" % "1.10.19" % "test"
