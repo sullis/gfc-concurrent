@@ -13,7 +13,10 @@ import org.mockito.Mockito._
 import org.mockito.Matchers
 
 class ScheduledExecutorServiceTest extends FunSuite with ScalaTestMatchers with MockitoSugar {
-  val javaService = Executors.newScheduledThreadPool(10)
+  val javaService = Executors.newScheduledThreadPool(20)
+
+  val TimeStepMs = 500
+  val FuzzFactor = 200
 
   test("asyncScheduleWithFixedDelay with mocks") {
     import ScalaFutures.Implicits.sameThreadExecutionContext
@@ -125,9 +128,9 @@ class ScheduledExecutorServiceTest extends FunSuite with ScalaTestMatchers with 
       throw toThrow
     }
 
-    service.asyncScheduleWithFixedDelay(0 millis, 50 millis)(newFuture)
+    service.asyncScheduleWithFixedDelay(0 millis, TimeStepMs millis)(newFuture)
 
-    latch.await(500, TimeUnit.MILLISECONDS) should be(true)
+    latch.await(10 * TimeStepMs, TimeUnit.MILLISECONDS) should be(true)
   }
 
   test("asyncScheduleWithFixedDelay sticks to delay") {
@@ -140,14 +143,14 @@ class ScheduledExecutorServiceTest extends FunSuite with ScalaTestMatchers with 
     val barrier = new CyclicBarrier(2)
     def newFuture(): Future[Int] = Future {
       barrier.await()
-      Thread.sleep(50)
+      Thread.sleep(TimeStepMs)
       1
     }
 
-    service.asyncScheduleWithFixedDelay(100 millis, 100 millis)(newFuture)
+    service.asyncScheduleWithFixedDelay(TimeStepMs millis, TimeStepMs millis)(newFuture)
 
-    checkTimeRange(80, 130)(barrier.await(500, TimeUnit.MILLISECONDS))
-    checkTimeRange(130, 180)(barrier.await(500, TimeUnit.MILLISECONDS))
+    checkFuzzyTiming(TimeStepMs)(barrier.await(5 * TimeStepMs, TimeUnit.MILLISECONDS))
+    checkFuzzyTiming(2 * TimeStepMs)(barrier.await(5 * TimeStepMs, TimeUnit.MILLISECONDS))
   }
 
   test("asyncScheduleAtFixedRate sticks to rate") {
@@ -160,14 +163,14 @@ class ScheduledExecutorServiceTest extends FunSuite with ScalaTestMatchers with 
     val barrier = new CyclicBarrier(2)
     def newFuture(): Future[Int] = Future {
       barrier.await()
-      Thread.sleep(50)
+      Thread.sleep(TimeStepMs / 2)
       1
     }
 
-    service.asyncScheduleAtFixedRate(100 millis, 100 millis)(newFuture)
+    service.asyncScheduleAtFixedRate(TimeStepMs millis, TimeStepMs millis)(newFuture)
 
-    checkTimeRange(80, 130)(barrier.await(500, TimeUnit.MILLISECONDS))
-    checkTimeRange(80, 130)(barrier.await(500, TimeUnit.MILLISECONDS))
+    checkFuzzyTiming(TimeStepMs)(barrier.await(5 * TimeStepMs, TimeUnit.MILLISECONDS))
+    checkFuzzyTiming(TimeStepMs)(barrier.await(5 * TimeStepMs, TimeUnit.MILLISECONDS))
   }
 
   test("asyncScheduleAtFixedRate reschedules immediately if task overruns rate") {
@@ -180,15 +183,15 @@ class ScheduledExecutorServiceTest extends FunSuite with ScalaTestMatchers with 
     val barrier = new CyclicBarrier(2)
     def newFuture(): Future[Int] = Future {
       barrier.await()
-      Thread.sleep(150)
+      Thread.sleep(2 * TimeStepMs)
       1
     }
 
-    service.asyncScheduleAtFixedRate(0 millis, 100 millis)(newFuture)
+    service.asyncScheduleAtFixedRate(0 millis, TimeStepMs millis)(newFuture)
 
-    checkTimeRange(0, 30)(barrier.await(500, TimeUnit.MILLISECONDS))
-    checkTimeRange(130, 180)(barrier.await(500, TimeUnit.MILLISECONDS))
-    checkTimeRange(130, 180)(barrier.await(500, TimeUnit.MILLISECONDS))
+    checkFuzzyTiming(0)(barrier.await(5 * TimeStepMs, TimeUnit.MILLISECONDS))
+    checkFuzzyTiming(2 * TimeStepMs)(barrier.await(5 * TimeStepMs, TimeUnit.MILLISECONDS))
+    checkFuzzyTiming(2 * TimeStepMs)(barrier.await(5 * TimeStepMs, TimeUnit.MILLISECONDS))
   }
 
   test("cancel cancels scheduled task") {
@@ -204,14 +207,13 @@ class ScheduledExecutorServiceTest extends FunSuite with ScalaTestMatchers with 
       Future.successful(1)
     }
 
-    val future = service.asyncScheduleAtFixedRate(0 millis, 100 millis)(newFuture)
+    val future = service.asyncScheduleAtFixedRate(0 millis, TimeStepMs millis)(newFuture)
 
-    checkTimeRange(0, 30)(barrier.await(500, TimeUnit.MILLISECONDS))
-    checkTimeRange(80, 130)(barrier.await(500, TimeUnit.MILLISECONDS))
-    Thread.sleep(50)
+    checkFuzzyTiming(0)(barrier.await(5 * TimeStepMs, TimeUnit.MILLISECONDS))
+    checkFuzzyTiming(TimeStepMs)(barrier.await(5 * TimeStepMs, TimeUnit.MILLISECONDS))
     future.cancel(false)
 
-    Thread.sleep(150)
+    Thread.sleep(2 * TimeStepMs)
     barrier.getNumberWaiting should be(0)
   }
 
@@ -225,22 +227,23 @@ class ScheduledExecutorServiceTest extends FunSuite with ScalaTestMatchers with 
     val barrier = new CyclicBarrier(2)
     def newFuture(): Future[Int] = Future {
       barrier.await()
-      Thread.sleep(100)
+      Thread.sleep(TimeStepMs)
       1
     }
 
-    val future = service.asyncScheduleAtFixedRate(0 millis, 100 millis)(newFuture)
+    val future = service.asyncScheduleAtFixedRate(0 millis, TimeStepMs millis)(newFuture)
 
-    checkTimeRange(0, 30)(barrier.await(500, TimeUnit.MILLISECONDS))
-    checkTimeRange(80, 130)(barrier.await(500, TimeUnit.MILLISECONDS))
-    Thread.sleep(50)
+    checkFuzzyTiming(0)(barrier.await(5 * TimeStepMs, TimeUnit.MILLISECONDS))
+    checkFuzzyTiming(TimeStepMs)(barrier.await(5 * TimeStepMs, TimeUnit.MILLISECONDS))
     future.cancel(false)
 
-    Thread.sleep(150)
+    Thread.sleep(2 * TimeStepMs)
     barrier.getNumberWaiting should be(0)
   }
 
-  def checkTimeRange[T](minMs: Long, maxMs: Long)(f: => T): T = {
+  def checkFuzzyTiming[T](exactMs: Long, fuzziness: Long = FuzzFactor)(f: => T): T = {
+    val minMs = Seq(0, exactMs - fuzziness).max
+    val maxMs = exactMs + fuzziness
     Timer.time { nanos =>
       (nanos / 1000000) should ((be >= (minMs)) and (be <=(maxMs)))
     }(f)
