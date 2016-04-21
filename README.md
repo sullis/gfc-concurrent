@@ -48,6 +48,12 @@ This object contains a bunch of sugar and little helpers that make working with 
     val futures: Seq[Future[String]] = ???
     ScalaFutures.forall(futures, _.contains("x"))
 ```
+* Sequential traverse that evaluates the Future function lazily and thus initiates them sequentially (one after the other) rather than in parallel as is the case with Future.traverse:
+```
+  def fetchPage(pageNo: Int): Future[Page] = ???
+  val pageNumbers: Seq[Int] = 1 to 10
+  val pages: Future[Seq[Page]] = ScalaFutures.traverseSequential(pageNumbers)(pageNo => fetchPage(pageNo))
+```
 * Enhanced fold that fails fast, as soon as a Future in the input collection fails. The "normal" scala.concurrent.Future.fold() will always take as long as the longest running Future, even if another Future has already failed. This implementation of fold will shortcut if any of the futures in the input collection fails:
 ```
     val futures: Seq[Future[String]] = ???
