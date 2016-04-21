@@ -53,7 +53,7 @@ case class FutureBuilder[A,R] private (
 , passThroughExceptionHandler: PartialFunction[Throwable, Throwable]
 
 // Allows us to retry calls when we bump into errors, but see passThroughExceptionHandler.
-, addNumRetries: (=> Future[Try[A]]) => Future[Try[A]]
+, addNumRetries: FutureBuilder[_,_] => (=> Future[Try[A]]) => Future[Try[A]]
 
 // Allows us to log service call times, to debug site problems.
 // All of this async stuff is notorious for not having comprehensible stack traces.
@@ -116,7 +116,10 @@ case class FutureBuilder[A,R] private (
            ( implicit ec: ExecutionContext )
            : FutureBuilder[A,R] = {
     require(n>0, "Num retries must be > 0")
-    copy( addNumRetries = { f => ScalaFutures.retry(n)(f) } )
+    copy( addNumRetries = b => { f =>
+      implicit def log(t: Throwable) { if (b.passThroughExceptionHandler.isDefinedAt(t)) b.passThroughExceptionHandler(t) }
+      ScalaFutures.retry(n)(f)
+    } )
   }
 
   /** Unfortunately, some exceptions are 'data' and are important for control flow, in their unmodified/unwrapped form,
@@ -178,7 +181,7 @@ case class FutureBuilder[A,R] private (
 
     // order matters, e.g. we want to apply single call timeout before any retries
     errorHandler(
-      addNumRetries(
+      addNumRetries(this)(
         addTraceCalls(
           addSingleCallTimeout(
             addErrorMessage(
@@ -243,7 +246,7 @@ object FutureBuilder {
     , additionalMessage           = additionalMessage
     , errorHandler                = defaultErrorHandler[A] _
     , passThroughExceptionHandler = PartialFunction.empty
-    , addNumRetries               = byNameId[A] _
+    , addNumRetries               = _ => byNameId[A] _
     , addTraceCalls               = byNameId[A] _
     , addSingleCallTimeout        = byNameId[A] _
     )
