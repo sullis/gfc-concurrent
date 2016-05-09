@@ -2,6 +2,9 @@ package com.gilt.gfc.concurrent
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ScheduledExecutorService => JScheduledExecutorService, CyclicBarrier, CountDownLatch, Executors, Callable, TimeUnit}
+import org.scalatest.concurrent.Eventually
+import org.scalatest.time.{Seconds, Span}
+
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import com.gilt.gfc.time.Timer
@@ -12,7 +15,7 @@ import org.scalatest.mock.MockitoSugar
 import org.mockito.Mockito._
 import org.mockito.Matchers
 
-class ScheduledExecutorServiceTest extends FunSuite with ScalaTestMatchers with MockitoSugar {
+class ScheduledExecutorServiceTest extends FunSuite with ScalaTestMatchers with MockitoSugar with Eventually {
   val javaService = Executors.newScheduledThreadPool(20)
 
   val TimeStepMs = 500
@@ -215,6 +218,31 @@ class ScheduledExecutorServiceTest extends FunSuite with ScalaTestMatchers with 
 
     Thread.sleep(2 * TimeStepMs)
     barrier.getNumberWaiting should be(0)
+  }
+
+  test("single-thread scheduled executor #submit Scala function sanity check") {
+    import com.gilt.gfc.concurrent.JavaConverters._
+    val n = new AtomicInteger(0)
+    val javaExecutor = Executors.newSingleThreadScheduledExecutor
+    val scalaExecutor = javaExecutor.asScala
+    scalaExecutor.submit {
+      n.incrementAndGet
+    }
+    val patienceConfig = PatienceConfig(timeout = scaled(Span(3, Seconds)), interval = scaled(Span(3, Seconds)))
+    eventually({ n.intValue should be > 0 })(patienceConfig)
+  }
+
+  test("single-thread scheduled executor #execute(javaRunnable) sanity check") {
+    import com.gilt.gfc.concurrent.JavaConverters._
+    val n = new AtomicInteger(0)
+    val javaExecutor = Executors.newSingleThreadScheduledExecutor
+    val scalaExecutor = javaExecutor.asScala
+    val runnable = new Runnable() {
+      override def run(): Unit = n.incrementAndGet
+    }
+    scalaExecutor.execute(runnable)
+    val patienceConfig = PatienceConfig(timeout = scaled(Span(3, Seconds)), interval = scaled(Span(3, Seconds)))
+    eventually({ n.intValue should be > 0 })(patienceConfig)
   }
 
   test("cancel does not reschedule") {
