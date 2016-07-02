@@ -142,6 +142,14 @@ or for debugging/logging purposes to identify clearly what are the active thread
                             build()
 ```
 
+### Code coverage report
+
+```
+
+  $ sbt clean coverage test coverageReport
+
+```
+
 ## License
 Copyright 2015 Gilt Groupe, Inc.
 
