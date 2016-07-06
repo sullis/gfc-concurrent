@@ -1,3 +1,5 @@
+import scoverage.ScoverageKeys
+
 name := "gfc-concurrent"
 
 organization := "com.gilt"
@@ -30,6 +32,10 @@ publishTo := {
 publishArtifact in Test := false
 
 pomIncludeRepository := { _ => false }
+
+ScoverageKeys.coverageFailOnMinimum := true
+
+ScoverageKeys.coverageMinimum := 73.0
 
 licenses := Seq("Apache-style" -> url("https://raw.githubusercontent.com/gilt/gfc-concurrent/master/LICENSE"))
 
