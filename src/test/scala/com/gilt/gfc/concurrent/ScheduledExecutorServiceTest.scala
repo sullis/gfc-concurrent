@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ScheduledExecutorService => JScheduledExecutorService, CyclicBarrier, CountDownLatch, Executors, Callable, TimeUnit}
 import org.scalatest.concurrent.Eventually
 import org.scalatest.time.{Seconds, Span}
-
+import org.scalactic.source.Position
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import com.gilt.gfc.time.Timer
@@ -229,7 +229,7 @@ class ScheduledExecutorServiceTest extends FunSuite with ScalaTestMatchers with 
       n.incrementAndGet
     }
     val patienceConfig = PatienceConfig(timeout = scaled(Span(3, Seconds)), interval = scaled(Span(3, Seconds)))
-    eventually({ n.intValue should be > 0 })(patienceConfig)
+    eventually({ n.intValue should be > 0 })(patienceConfig, Position.here)
   }
 
   test("single-thread scheduled executor #execute(javaRunnable) sanity check") {
@@ -242,7 +242,7 @@ class ScheduledExecutorServiceTest extends FunSuite with ScalaTestMatchers with 
     }
     scalaExecutor.execute(runnable)
     val patienceConfig = PatienceConfig(timeout = scaled(Span(3, Seconds)), interval = scaled(Span(3, Seconds)))
-    eventually({ n.intValue should be > 0 })(patienceConfig)
+    eventually({ n.intValue should be > 0 })(patienceConfig, Position.here)
   }
 
   test("cancel does not reschedule") {
